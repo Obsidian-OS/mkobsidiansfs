@@ -1,0 +1,36 @@
+#!/bin/bash
+if [[ $EUID -ne 0 ]]; then
+  echo "This script must be run as root."
+  exit 1
+fi
+BUILD_DIR="obsidian_rootfs"
+PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
+OUTPUT_SFS="system.sfs"
+for tool in pacstrap arch-chroot mksquashfs; do
+  if ! command -v $tool &>/dev/null; then
+    echo "Error: Required command '$tool' not found. Please install it."
+    exit 1
+  fi
+done
+echo ">>> Cleaning up any previous build directories..."
+rm -rf "$BUILD_DIR"
+rm -f "$OUTPUT_SFS"
+mkdir -p "$BUILD_DIR"
+echo ">>> Bootstrapping the base system with pacstrap..."
+echo ">>> This may take some time, depending on your internet connection."
+if ! pacstrap -c -K "$BUILD_DIR" $PACKAGES; then
+  echo "Error: pacstrap failed to install the base system."
+  exit 1
+fi
+echo ">>> Enabling NetworkManager to start on boot..."
+arch-chroot "$BUILD_DIR" systemctl enable NetworkManager
+echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
+  echo "Error: mksquashfs failed to create the image."
+  exit 1
+fi
+echo ">>> Cleaning up the build directory..."
+rm -rf "$BUILD_DIR"
+echo "---"
+echo ">>> Success! ObsidianOS system image created at: $(pwd)/$OUTPUT_SFS"
+echo ">>> Packages included: $PACKAGES"
