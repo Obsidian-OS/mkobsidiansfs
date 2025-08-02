@@ -6,6 +6,11 @@ fi
 BUILD_DIR="obsidian_rootfs"
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
 OUTPUT_SFS="system.sfs"
+CUSTOM_SCRIPTS_DIR=""
+if [[ -n "$1" && -d "$1" ]]; then
+  CUSTOM_SCRIPTS_DIR="$(realpath "$1")"
+  echo ">>> Custom scripts directory specified: $CUSTOM_SCRIPTS_DIR"
+fi
 for tool in pacstrap arch-chroot mksquashfs; do
   if ! command -v $tool &>/dev/null; then
     echo "Error: Required command '$tool' not found. Please install it."
@@ -24,6 +29,16 @@ if ! pacstrap -c -K "$BUILD_DIR" $PACKAGES; then
 fi
 echo ">>> Enabling NetworkManager to start on boot..."
 arch-chroot "$BUILD_DIR" systemctl enable NetworkManager
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/tmp/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR"/* "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+fi
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
   echo "Error: mksquashfs failed to create the image."
