@@ -1,32 +1,58 @@
 #!/bin/bash
+# mkobsidianfs - Make a squashfs for installation
+set -e
 if [[ $EUID -ne 0 ]]; then
   echo "This script must be run as root."
   exit 1
 fi
-BUILD_DIR="obsidian_rootfs"
+# Default Settings. Do not edit, source a script that just edits these files.
+BUILD_DIR="obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
-OUTPUT_SFS="system.sfs"
-CUSTOM_SCRIPTS_DIR=""
+OUTPUT_SFS="system.sfs" # Output SquashFS
+CUSTOM_SCRIPTS_DIR=""   # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER=""           # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_DOTFILES_TYPE=""  # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+                        # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
+                        # CONFIG - the inside of the repo has data for your home directory (ex: gtk, fish, kitty, hypr)
+                        # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
+                        #     recommended: set this to $SUDO_USER if this is being run with sudo.
+
+# Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
-  CUSTOM_SCRIPTS_DIR="$(realpath "$1")"
-  echo ">>> Custom scripts directory specified: $CUSTOM_SCRIPTS_DIR"
+  source $1
+  echo ">>> Custom settings directory specified: $1"
 fi
-for tool in pacstrap arch-chroot mksquashfs; do
+
+# Check for needed commands
+if ! command -v mksquashfs; then
+  echo "Error: Required command 'mksquashfs' not found. Please install it."
+  echo "mksquashfs is prodvided by squashfs-tools on Arch Linux"
+  exit 1
+fi
+for tool in pacstrap arch-chroot; do
   if ! command -v $tool &>/dev/null; then
     echo "Error: Required command '$tool' not found. Please install it."
+    echo "$tool is part of the arch-install-scripts package on Arch Linux."
     exit 1
   fi
 done
+
+# Clean up build directories to start creating the filesystem
 echo ">>> Cleaning up any previous build directories..."
 rm -rf "$BUILD_DIR"
 rm -f "$OUTPUT_SFS"
 mkdir -p "$BUILD_DIR"
+
+# Bootstrapping system
 echo ">>> Bootstrapping the base system with pacstrap..."
 echo ">>> This may take some time, depending on your internet connection."
 if ! pacstrap -c -K "$BUILD_DIR" $PACKAGES; then
   echo "Error: pacstrap failed to install the base system."
   exit 1
 fi
+
+# Enabling services and copying scripts
 echo ">>> Enabling NetworkManager to start on boot..."
 arch-chroot "$BUILD_DIR" systemctl enable NetworkManager
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
@@ -39,6 +65,24 @@ if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Cleaning up custom scripts from chroot..."
   rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
+
+# Create admin user
+if [[ -n "$ADMIN_USER" ]]; then
+  echo "Creating user $ADMIN_USER..."
+  arch-chroot "$BUILD_DIR" useradd -m -G wheel -s /bin/bash "$ADMIN_USER"
+  if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
+    if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/dotfiles/.git"
+    elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
+    else
+      cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
+    fi
+  fi
+  echo '%wheel ALL=(ALL) ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
+fi
+
+# Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
   echo "Error: mksquashfs failed to create the image."
