@@ -15,7 +15,7 @@ ADMIN_USER=""           # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
 ADMIN_DOTFILES_TYPE=""  # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
                         # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
-                        # CONFIG - the inside of the repo has data for your home directory (ex: gtk, fish, kitty, hypr)
+                        # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
                         # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
                         #     recommended: set this to $SUDO_USER if this is being run with sudo.
 
