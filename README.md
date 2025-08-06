@@ -16,6 +16,7 @@ BUILD_DIR="obsidian_rootfs" # SquashFS generation directory
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel" # Packages to install
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE="America/New_York" # Olson Timezone
+HOSTNAME="obsidian" # Hostname
 CUSTOM_SCRIPTS_DIR="" # Path to a directory containing custom shell scripts, including a main.sh script.
 # If provided, these scripts will be copied into the chroot environment, made executable, and main.sh will be executed within the chroot.
 # This allows for custom configurations or installations to be performed inside the SquashFS image.
