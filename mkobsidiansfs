@@ -22,7 +22,7 @@ ADMIN_DOTFILES_TYPE=""  # Type of dotfile repo. Requires git in PACKAGES if HOME
 # Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
   source $1
-  echo ">>> Custom settings directory specified: $1"
+  echo ">>> Custom config file specified: $1"
 fi
 
 # Check for needed commands
