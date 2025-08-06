@@ -10,6 +10,7 @@ BUILD_DIR="obsidian_rootfs" # SquashFS generation directory # Below is default p
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE=""             # Olson Timezone
+HOSTNAME="obsidianbtw"  # Hostname
 CUSTOM_SCRIPTS_DIR=""   # Place where scripts that must run in the SquashFS will run.
 ADMIN_USER=""           # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
@@ -73,7 +74,7 @@ if [[ -n "$ADMIN_USER" ]]; then
   arch-chroot "$BUILD_DIR" useradd -m -G wheel -s /bin/bash "$ADMIN_USER"
   if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/dotfiles/.git"
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
     elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
     else
@@ -81,12 +82,24 @@ if [[ -n "$ADMIN_USER" ]]; then
     fi
   fi
   echo '%wheel ALL=(ALL) ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
+  # Add user password
+  echo ">>> Please set the password for $ADMIN_USER"
+  arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
   echo "Setting timezone to $TIMEZONE..."
   arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
 fi
+
+if [[ -n "$HOSTNAME" ]]; then
+  echo "Setting hostname to $HOSTNAME..."
+  echo "$HOSTNAME">"$BUILD_DIR/etc/hostname"
+fi
+
+# Add root assword
+echo ">>> Please set the password for the root user"
+arch-chroot "$BUILD_DIR" passwd
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
