@@ -9,6 +9,7 @@ fi
 BUILD_DIR="obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
 OUTPUT_SFS="system.sfs" # Output SquashFS
+TIMEZONE=""             # Olson Timezone
 CUSTOM_SCRIPTS_DIR=""   # Place where scripts that must run in the SquashFS will run.
 ADMIN_USER=""           # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
@@ -80,6 +81,11 @@ if [[ -n "$ADMIN_USER" ]]; then
     fi
   fi
   echo '%wheel ALL=(ALL) ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
+fi
+
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
 fi
 
 # Creating SquashFS image
