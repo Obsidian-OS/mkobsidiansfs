@@ -4,7 +4,7 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 BUILD_DIR="obsidian_rootfs"
-PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
+PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel $2"
 OUTPUT_SFS="system.sfs"
 CUSTOM_SCRIPTS_DIR=""
 if [[ "$1" != "" ]]; then
