@@ -22,7 +22,7 @@ ADMIN_DOTFILES_TYPE=""  # Type of dotfile repo. Requires git in PACKAGES if HOME
 
 # Import settings from file. File extention: something.mkobsfs
 BUILD_DIR="obsidian_rootfs"
-PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel $2"
+PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel"
 OUTPUT_SFS="system.sfs"
 CUSTOM_SCRIPTS_DIR=""
 if [[ "$1" != "" ]]; then
