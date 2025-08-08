@@ -28,4 +28,4 @@ ADMIN_DOTFILES_TYPE="" # Type of dotfile repo.
 # CONFIG - the inside of the repo has data for your config directory (ex: gtk, fish, kitty, hypr) (requires git to be in PACKAGES)
 # * - ignore dotfiles repo and copy dotfiles from that user's home.
 ```
-An configuration should end with the `.obfs` extention to identify it clearly.
+An configuration should end with the `.mkobsfs` extention to identify it clearly.
