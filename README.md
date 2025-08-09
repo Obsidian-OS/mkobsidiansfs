@@ -12,7 +12,7 @@ sudo ./mkobsidiansfs [config]
 Example:
 ```
 # --- System creation ---
-BUILD_DIR="obsidian_rootfs" # SquashFS generation directory
+BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel" # Packages to install
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE="America/New_York" # Olson Timezone
