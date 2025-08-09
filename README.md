@@ -17,6 +17,7 @@ PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr pyth
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE="America/New_York" # Olson Timezone
 HOSTNAME="obsidian" # Hostname
+ROOT_HAVEPASSWORD="" # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR="" # Path to a directory containing custom shell scripts, including a main.sh script.
 # If provided, these scripts will be copied into the chroot environment, made executable, and main.sh will be executed within the chroot.
 # This allows for custom configurations or installations to be performed inside the SquashFS image.
