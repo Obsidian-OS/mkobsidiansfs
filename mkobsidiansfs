@@ -11,6 +11,7 @@ PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr pyth
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE=""             # Olson Timezone
 HOSTNAME="obsidianbtw"  # Hostname
+ROOT_HAVEPASSWORD=""    # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""   # Place where scripts that must run in the SquashFS will run.
 ADMIN_USER=""           # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
@@ -98,8 +99,12 @@ if [[ -n "$HOSTNAME" ]]; then
 fi
 
 # Add root assword
-echo ">>> Please set the password for the root user"
-arch-chroot "$BUILD_DIR" passwd
+if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
+  echo ">>> Please set the password for the root user"
+  arch-chroot "$BUILD_DIR" passwd
+else
+  arch-chroot "$BUILD_DIR" passwd -d
+fi
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
