@@ -101,9 +101,9 @@ fi
 # Add root assword
 if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
   echo ">>> Please set the password for the root user"
-  arch-chroot "$BUILD_DIR" passwd
+  arch-chroot "$BUILD_DIR" passwd root
 else
-  arch-chroot "$BUILD_DIR" passwd -d
+  arch-chroot "$BUILD_DIR" passwd -d root
 fi
 
 # Creating SquashFS image
