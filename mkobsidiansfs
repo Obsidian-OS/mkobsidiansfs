@@ -8,16 +8,16 @@ fi
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git"
-HAVE_AUR="yay-bin"      # Manual AUR package. Only set to yay-bin or none. Only use none if you do not have base-devel or git there ^
-YAY_GET="obsidianctl-git"              # Packages to get from the AUR with yay. Please do not change.
-OUTPUT_SFS="system.sfs" # Output SquashFS
-TIMEZONE=""             # Olson Timezone
-HOSTNAME="obsidianbtw"  # Hostname
-ROOT_HAVEPASSWORD=""    # Set this to anything other than blank to remove the password from the root user.
-CUSTOM_SCRIPTS_DIR=""   # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER=""           # Creates an user with the 'wheel' group
-ADMIN_DOTFILES=""       # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_DOTFILES_TYPE=""  # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+HAVE_AUR="yay-bin"        # Manual AUR package. Only set to yay-bin or none. Only use none if you do not have base-devel or git there ^
+YAY_GET="obsidianctl-git" # Packages to get from the AUR with yay. Please do not change.
+OUTPUT_SFS="system.sfs"   # Output SquashFS
+TIMEZONE=""               # Olson Timezone
+HOSTNAME="obsidianbtw"    # Hostname
+ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER=""             # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""         # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
@@ -96,7 +96,7 @@ if [[ -n "$ADMIN_USER" ]]; then
 
   if [[ -n "$HAVE_AUR" ]]; then
     # Create a temp script inside the chroot for yay build and install
-    arch-chroot "$BUILD_DIR" sh -c "cat > /tmp/install-yay.sh" <<'EOF'
+    arch-chroot "$BUILD_DIR" sh -c "cat > /root/install-yay.sh" <<'EOF'
 #!/bin/bash
 export PACMAN='pacman --disable-space-check'
 cd ~
@@ -104,20 +104,19 @@ git clone https://aur.archlinux.org/yay-bin.git
 cd yay-bin
 makepkg --noconfirm --skippgpcheck -si
 EOF
-    arch-chroot "$BUILD_DIR" chmod +x /tmp/install-yay.sh
-    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "/tmp/install-yay.sh"
-
+    arch-chroot "$BUILD_DIR" chmod +x /root/install-yay.sh
+    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "/root/install-yay.sh"
     if [[ -n "$YAY_GET" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "export PACMAN='pacman --disable-space-check'; yay -S --noconfirm $YAY_GET"
       touch "$BUILD_DIR/obsidianctl-aur-installed"
     fi
+    arch-chroot "$BUILD_DIR" rm /root/install-yay.sh
   fi
 
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
 fi
-
 
 if [[ -n "$TIMEZONE" ]]; then
   echo "Setting timezone to $TIMEZONE..."
