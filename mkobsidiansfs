@@ -27,6 +27,11 @@ if [[ "$1" != "" ]]; then
   echo ">>> Custom config file specified: $1"
 fi
 
+if [[ "$2" != "" ]]; then
+  OUTPUT_SFS="$2"
+  echo ">>> Custom sfs output: $2"
+fi
+
 # Check for needed commands
 if ! command -v mksquashfs; then
   echo "Error: Required command 'mksquashfs' not found. Please install it."
