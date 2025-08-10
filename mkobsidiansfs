@@ -8,6 +8,8 @@ fi
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
 PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git"
+HAVE_AUR="yay-bin"      # Manual AUR package. Only set to yay-bin or none. Only use none if you do not have base-devel or git there ^
+YAY_GET=""              # Packages to get from the AUR with yay. Please do not change.
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE=""             # Olson Timezone
 HOSTNAME="obsidianbtw"  # Hostname
@@ -109,6 +111,14 @@ if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
   arch-chroot "$BUILD_DIR" passwd root
 else
   arch-chroot "$BUILD_DIR" passwd -d root
+fi
+
+# Install aur helper and packages
+if [[ -n "$HAVE_AUR" ]]; then
+  arch-chroot "$BUILD_DIR" sh -c "cd ~;git clone https://aur.archlinux.org/yay-bin.git;cd yay-bin;makepkg -si"
+  if [[ -n "$YAY_GET" ]]; then
+    arch-chroot "$BUILD_DIR" yay -s $YAY_GET # do not put in quotes
+  fi
 fi
 
 # Creating SquashFS image
