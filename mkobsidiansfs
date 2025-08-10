@@ -89,8 +89,8 @@ if [[ -n "$ADMIN_USER" ]]; then
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
   fi
-  arch-chroot "$BUILD_DIR" passwd -d "$ADMIN_USER"
-  echo '%wheel ALL=(ALL) NOPASSWD: ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
+  arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
+  arch-chroot "$BUILD_DIR" visudo -c
   # Install aur helper and packages
   if [[ -n "$HAVE_AUR" ]]; then
     arch-chroot "$BUILD_DIR" su "$ADMIN_USER" sh -c "export PACMAN='pacman --disable-space-check';cd ~;git clone https://aur.archlinux.org/yay-bin.git;cd yay-bin;makepkg -si"
