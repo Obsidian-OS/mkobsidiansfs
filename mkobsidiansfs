@@ -80,6 +80,7 @@ fi
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
   arch-chroot "$BUILD_DIR" useradd -m -G wheel -s /bin/bash "$ADMIN_USER"
+
   if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
@@ -89,28 +90,34 @@ if [[ -n "$ADMIN_USER" ]]; then
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
   fi
+
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
+
   if [[ -n "$HAVE_AUR" ]]; then
-    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "
-      export PACMAN='pacman --disable-space-check'
-      cd ~
-      git clone https://aur.archlinux.org/yay-bin.git
-      cd yay-bin
-      makepkg --noconfirm --skippgpcheck -si
-    "
+    # Create a temp script inside the chroot for yay build and install
+    arch-chroot "$BUILD_DIR" sh -c "cat > /tmp/install-yay.sh" <<'EOF'
+#!/bin/bash
+export PACMAN='pacman --disable-space-check'
+cd ~
+git clone https://aur.archlinux.org/yay-bin.git
+cd yay-bin
+makepkg --noconfirm --skippgpcheck -si
+EOF
+    arch-chroot "$BUILD_DIR" chmod +x /tmp/install-yay.sh
+    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "/tmp/install-yay.sh"
+
     if [[ -n "$YAY_GET" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "
-        export PACMAN='pacman --disable-space-check'
-        yay -S --noconfirm $YAY_GET
-      "
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "export PACMAN='pacman --disable-space-check'; yay -S --noconfirm $YAY_GET"
       touch "$BUILD_DIR/obsidianctl-aur-installed"
     fi
   fi
-  # Add user password
+
+  # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
 fi
+
 
 if [[ -n "$TIMEZONE" ]]; then
   echo "Setting timezone to $TIMEZONE..."
