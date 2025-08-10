@@ -93,6 +93,14 @@ if [[ -n "$ADMIN_USER" ]]; then
   # Add user password
   echo ">>> Please set the password for $ADMIN_USER"
   arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  # Install aur helper and packages
+  if [[ -n "$HAVE_AUR" ]]; then
+    arch-chroot "$BUILD_DIR" su "$ADMIN_USER" sh -c "cd ~;git clone https://aur.archlinux.org/yay-bin.git;cd yay-bin;makepkg -si"
+    if [[ -n "$YAY_GET" ]]; then
+      arch-chroot "$BUILD_DIR" su "$ADMIN_USER" yay -s $YAY_GET # do not put in quotes
+      touch "$BUILD_DIR/obsidianctl-aur-installed"
+    fi
+  fi
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
@@ -105,21 +113,12 @@ if [[ -n "$HOSTNAME" ]]; then
   echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
 fi
 
-# Add root assword
+# Add root password
 if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
   echo ">>> Please set the password for the root user"
   arch-chroot "$BUILD_DIR" passwd root
 else
   arch-chroot "$BUILD_DIR" passwd -d root
-fi
-
-# Install aur helper and packages
-if [[ -n "$HAVE_AUR" ]]; then
-  arch-chroot "$BUILD_DIR" sh -c "cd ~;git clone https://aur.archlinux.org/yay-bin.git;cd yay-bin;makepkg -si"
-  if [[ -n "$YAY_GET" ]]; then
-    arch-chroot "$BUILD_DIR" yay -s $YAY_GET # do not put in quotes
-    touch "$BUILD_DIR/obsidianctl-aur-installed"
-  fi
 fi
 
 # Creating SquashFS image
