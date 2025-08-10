@@ -89,10 +89,8 @@ if [[ -n "$ADMIN_USER" ]]; then
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
   fi
-  echo '%wheel ALL=(ALL) ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
-  # Add user password
-  echo ">>> Please set the password for $ADMIN_USER"
-  arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  arch-chroot "$BUILD_DIR" passwd -d "$ADMIN_USER"
+  echo '%wheel ALL=(ALL) NOPASSWD: ALL' | arch-chroot "$BUILD_DIR" sh -c "EDITOR='tee -a' visudo"
   # Install aur helper and packages
   if [[ -n "$HAVE_AUR" ]]; then
     arch-chroot "$BUILD_DIR" su "$ADMIN_USER" sh -c "cd ~;git clone https://aur.archlinux.org/yay-bin.git;cd yay-bin;makepkg -si"
@@ -101,6 +99,9 @@ if [[ -n "$ADMIN_USER" ]]; then
       touch "$BUILD_DIR/obsidianctl-aur-installed"
     fi
   fi
+  # Add user password
+  echo ">>> Please set the password for $ADMIN_USER"
+  arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
