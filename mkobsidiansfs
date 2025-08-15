@@ -145,6 +145,10 @@ else
   arch-chroot "$BUILD_DIR" passwd -d root
 fi
 
+# Copy config to target system
+echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs"
+
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
