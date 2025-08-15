@@ -29,6 +29,7 @@ ADMIN_DOTFILES_TYPE="" # Type of dotfile repo.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc) (requires git to be in PACKAGES)
 # CONFIG - the inside of the repo has data for your config directory (ex: gtk, fish, kitty, hypr) (requires git to be in PACKAGES)
 # * - ignore dotfiles repo and copy dotfiles from that user's home.
+POST_INSTALL="" # Command to run inside chroot
 ```
 An configuration should end with the `.mkobsfs` extention to identify it clearly.
 

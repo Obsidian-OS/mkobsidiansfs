@@ -40,6 +40,7 @@ ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HO
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
+POST_INSTALL="" # Line of bash to execute after installation is done
 
 # Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
@@ -98,7 +99,13 @@ if [[ -n "$ADMIN_USER" ]]; then
     else
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
-  fi
+    if [[ -n "$POST_INSTALL" ]]; then
+      if [[ "$POST_INSTALL" == "architect*" ]]; then
+        arch-chroot "$BUILD_DIR" su - "root" -c "touch /etc/architect.sh"
+        arch-chroot "$BUILD_DIR" su - "root" -c "chown -R $ADMIN_USER:$ADMIN_USER /etc/architect.sh"
+      fi
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
+    fi
 
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
