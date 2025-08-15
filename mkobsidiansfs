@@ -106,7 +106,7 @@ if [[ -n "$ADMIN_USER" ]]; then
       fi
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
-
+fi
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
 
