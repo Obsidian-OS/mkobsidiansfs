@@ -5,7 +5,7 @@ A bash script used to make a SquashFS image with multiple packages to be install
 ## Usage
 
 ```bash
-sudo ./mkobsidiansfs [config]
+sudo ./mkobsidiansfs [config] [output_sfs]
 ```
 
 `config` (optional): a config file that let's you configure your system declarativly.
@@ -17,6 +17,7 @@ PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr pyth
 OUTPUT_SFS="system.sfs" # Output SquashFS
 TIMEZONE="America/New_York" # Olson Timezone
 HOSTNAME="obsidian" # Hostname
+SERVICES="NetworkManager" # Services to enable
 ROOT_HAVEPASSWORD="" # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR="" # Path to a directory containing custom shell scripts, including a main.sh script.
 # If provided, these scripts will be copied into the chroot environment, made executable, and main.sh will be executed within the chroot.
@@ -30,3 +31,5 @@ ADMIN_DOTFILES_TYPE="" # Type of dotfile repo.
 # * - ignore dotfiles repo and copy dotfiles from that user's home.
 ```
 An configuration should end with the `.mkobsfs` extention to identify it clearly.
+
+`output_sfs` (optional): overrides the OUTPUT_SFS configuration
