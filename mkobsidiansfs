@@ -28,6 +28,7 @@ HAVE_AUR="yay-bin"        # Manual AUR package. Only set to yay-bin or none. Onl
 YAY_GET="obsidianctl-git" # Packages to get from the AUR with yay.
 OUTPUT_SFS="system.sfs"   # Output SquashFS
 TIMEZONE=""               # Olson Timezone
+NETUPDATE=""              # DO NOT SET. Used internally to enable obsidianctl netupdate.
 HOSTNAME="obsidianbtw"    # Hostname
 SERVICES="NetworkManager" # Services to enable with systemctl
 ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
@@ -147,7 +148,12 @@ fi
 
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
-cp "$1" "$BUILD_DIR/etc/config.mkobsfs"
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs"||true
+
+if [[ -n "$NETUPDATE" ]]; then
+  echo ">>> Enabling obsidianctl netupdate."
+  touch "$BUILD_DIR/etc/obsidianctl-netupdate-enable-DONOTDELETE"
+fi
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
