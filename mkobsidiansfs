@@ -35,6 +35,7 @@ ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the 
 CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
 ADMIN_USER=""             # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""         # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""         # Password to set for ADMIN_USER, if empty will ask interactively
 ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
