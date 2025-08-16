@@ -1,5 +1,5 @@
 #!/bin/bash
-# mkobsidianfs - Make a squashfs for installation
+# mkobsidianfs - ObsidianOS System Image Build Tool
 set -e
 
 # Function to check if a command exists
@@ -100,10 +100,6 @@ if [[ -n "$ADMIN_USER" ]]; then
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
     if [[ -n "$POST_INSTALL" ]]; then
-      if [[ "$POST_INSTALL" == "architect*" ]]; then
-        arch-chroot "$BUILD_DIR" su - "root" -c "touch /etc/architect.sh"
-        arch-chroot "$BUILD_DIR" su - "root" -c "chown -R $ADMIN_USER:$ADMIN_USER /etc/architect.sh"
-      fi
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
 fi
@@ -132,7 +128,12 @@ EOF
 
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
-  arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  if [[ -n "$ADMIN_PASSWORD" ]]; then
+    arch-chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
+    echo ">>> Password defined in config. skipping..."
+  else
+    arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  fi
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
