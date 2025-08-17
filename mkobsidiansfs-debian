@@ -95,7 +95,7 @@ if [[ -n "$ADMIN_USER" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
       chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
     elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
-      chroot "$BUILD_dir" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
+      chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
     else
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
