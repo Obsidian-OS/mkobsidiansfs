@@ -42,7 +42,7 @@ ADMIN_DOTFILES_TYPE=""     # Type of dotfile repo. Requires git in PACKAGES if H
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
-POST_INSTALL="" # Line of bash to execute after installation is done
+POST_INSTALL="echo \"#!/bin/sh\ncd /boot || exit 1\nln -sf vmlinuz-linux vmlinuz\nln -sf initramfs-linux.img initrd.img\nexit 0\" > /etc/kernel/postinst.d/99-update-symlinks && chmod +x /etc/kernel/postinst.d/99-update-symlinks && /etc/kernel/postinst.d/99-update-symlinks " # Line of bash to execute after installation is done (DO NOT OVERRIDE, ADD TO IT.)
 
 # Import settings from file. File extention: something.mkdobsfs
 if [[ "$1" != "" ]]; then
