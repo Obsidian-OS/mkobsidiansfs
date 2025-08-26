@@ -114,7 +114,7 @@ fi
     arch-chroot "$BUILD_DIR" sh -c "cat > /home/$ADMIN_USER/install-yay.sh" <<'EOF'
 #!/bin/bash
 cd ~
-git clone https://aur.archlinux.org/yay-bin.git
+git clone --branch yay-bin --single-branch https://github.com/archlinux/aur.git yay-bin
 cd yay-bin
 makepkg --noconfirm --skippgpcheck -si
 EOF
