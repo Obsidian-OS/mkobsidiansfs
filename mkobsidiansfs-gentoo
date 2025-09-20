@@ -22,13 +22,14 @@ fi
 check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
-BUILD_DIR="/tmp/obsidian_rootfs_gentoo" # SquashFS generation directory
+BUILD_DIR="/home/$USER/mkobsidiansfs/obsidian_rootfs_gentoo" # SquashFS generation directory
 GENTOO_ARCH="amd64"
+ACCEPT_LICENSE="*"
 GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
 GENTOO_PROFILE="default/linux/amd64/23.0/desktop/systemd" # Gentoo release
 # Below is default packages for a minimal Gentoo desktop install and this script to work.
-PACKAGES="sys-apps/baselayout net-misc/networkmanager app-admin/sudo app-editors/vim app-editors/nano sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools dev-vcs/git sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/linux-firmware sys-kernel/gentoo-kernel-bin"
+PACKAGES="sys-apps/baselayout net-misc/networkmanager app-admin/sudo app-editors/nano sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools dev-vcs/git sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/linux-firmware sys-kernel/gentoo-kernel-bin"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-gentoo" # Hostname
@@ -112,6 +113,9 @@ chroot_exec "eselect profile set $GENTOO_PROFILE"
 
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
 chroot_exec "echo 'MAKEOPTS="-j$(nproc)"' >> /etc/portage/make.conf"
+chroot_exec "echo 'LICENSE_ACCEPT="~$ACCEPT_LICENSE"' >> /etc/portage/make.conf" # For newer packages
+chroot_exec "echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" | tee -a /etc/portage/package.license"
+chroot_exec "echo "sys-kernel/installkernel dracut" | tee -a /etc/portage/package.use/installkernel"
 chroot_exec "echo 'ACCEPT_KEYWORDS="~$GENTOO_ARCH"' >> /etc/portage/make.conf" # For newer packages
 
 echo ">>> Installing specified packages..."
