@@ -1,0 +1,215 @@
+#!/bin/bash
+# mkobsidiansfs-gentoo - ObsidianOS Gentoo System Image Build Tool
+set -e
+
+# Function to check if a command exists
+check_command() {
+  local cmd="$1"
+  local extra_msg="$2"
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Error: Required command '$cmd' not found. Please install it."
+    [[ -n "$extra_msg" ]] && echo "$extra_msg"
+    exit 1
+  fi
+}
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This script must be run as root."
+  exit 1
+fi
+
+# Check if git is installed (needed for dotfiles)
+check_command git
+
+# Default Settings. Do not edit, source a script that just edits these files.
+BUILD_DIR="/home/$USER/mkobsidiansfs/obsidian_rootfs_gentoo" # SquashFS generation directory
+GENTOO_ARCH="amd64"
+ACCEPT_LICENSE="*"
+GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
+GENTOO_MIRROR="https://distfiles.gentoo.org/"
+GENTOO_PROFILE="default/linux/amd64/23.0/desktop/systemd" # Gentoo release
+# Below is default packages for a minimal Gentoo desktop install and this script to work.
+PACKAGES="sys-apps/baselayout net-misc/networkmanager app-admin/sudo app-editors/nano sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools dev-vcs/git sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/linux-firmware sys-kernel/gentoo-kernel-bin"
+OUTPUT_SFS="system.sfs"    # Output SquashFS
+TIMEZONE=""                # Olson Timezone
+HOSTNAME="obsidian-gentoo" # Hostname
+SERVICES="NetworkManager"  # Services to enable with systemctl
+ROOT_HAVEPASSWORD=""       # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""      # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER=""              # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""          # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""          # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""     # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+# HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
+# CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
+# * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
+#     recommended: set this to $SUDO_USER if this is being run with sudo.
+POST_INSTALL="" # Line of bash to execute after installation is done
+
+# Import settings from file. File extention: something.mkgentoosfs
+if [[ "$1" != "" ]]; then
+  source "$1"
+  echo ">>> Custom config file specified: $1"
+fi
+
+# Dynamically fetch GENTOO_STAGE3_URL if set to "-"
+if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
+  echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
+  STAGE3_BASE_URL="https://distfiles.gentoo.org/releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-systemd/"
+  STAGE3_FILENAME=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-desktop-systemd/ |
+    grep -o "\"stage3-$GENTOO_ARCH-desktop-systemd.*\.tar\.xz\"" |
+    sed 's/^.\(.*\).$/\1/')
+  if [[ -z "$STAGE3_FILENAME" ]]; then
+    echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
+    exit 1
+  fi
+  GENTOO_STAGE3_URL="${STAGE3_BASE_URL}${STAGE3_FILENAME}"
+  echo ">>> Fetched Stage3 URL: $GENTOO_STAGE3_URL"
+fi
+
+if [[ "$2" != "" ]]; then
+
+  OUTPUT_SFS="$2"
+  echo ">>> Custom sfs output: $2"
+fi
+
+# Check for needed commands
+check_command mksquashfs "mksquashfs is provided by squashfs-tools on Gentoo."
+check_command wget "wget is needed to download the stage3 tarball."
+check_command tar "tar is needed to extract the stage3 tarball."
+
+# Clean up build directories to start creating the filesystem
+echo ">>> Cleaning up any previous build directories..."
+rm -rf "$BUILD_DIR"
+rm -f "$OUTPUT_SFS"
+mkdir -p "$BUILD_DIR"
+
+# Bootstrapping system
+echo ">>> Downloading Gentoo stage3 tarball..."
+STAGE3_TARBALL=$(basename "$GENTOO_STAGE3_URL")
+wget -O "/tmp/$STAGE3_TARBALL" "$GENTOO_STAGE3_URL"
+echo ">>> Extracting stage3 tarball to $BUILD_DIR..."
+tar xpf "/tmp/$STAGE3_TARBALL" --xattrs-include='*.*' --numeric-owner -C "$BUILD_DIR"
+echo ">>> Setting up chroot environment..."
+mkdir -p "$BUILD_DIR/proc" "$BUILD_DIR/sys" "$BUILD_DIR/dev" "$BUILD_DIR/tmp"
+mount -t proc /proc "$BUILD_DIR/proc"
+mount --rbind /sys "$BUILD_DIR/sys"
+mount --make-rslave "$BUILD_DIR/sys"
+mount --rbind /dev "$BUILD_DIR/dev"
+mount --make-rslave "$BUILD_DIR/dev"
+mount -t tmpfs tmpfs "$BUILD_DIR/tmp"
+cp /etc/resolv.conf "$BUILD_DIR/etc/"
+
+# Chroot into the new system
+chroot_exec() {
+  chroot "$BUILD_DIR" /bin/bash -c "source /etc/profile && export PS1='(chroot) ${PS1}' && $*"
+}
+
+echo ">>> Updating Portage tree..."
+chroot_exec "emerge --sync"
+
+echo ">>> Selecting Gentoo profile: $GENTOO_PROFILE"
+chroot_exec "eselect profile set $GENTOO_PROFILE"
+
+echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
+chroot_exec "echo 'MAKEOPTS="-j$(nproc)"' >> /etc/portage/make.conf"
+chroot_exec "echo 'LICENSE_ACCEPT="~$ACCEPT_LICENSE"' >> /etc/portage/make.conf" # For newer packages
+chroot_exec "echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" | tee -a /etc/portage/package.license"
+chroot_exec "echo "sys-kernel/installkernel dracut" | tee -a /etc/portage/package.use/installkernel"
+chroot_exec "echo 'ACCEPT_KEYWORDS="~$GENTOO_ARCH"' >> /etc/portage/make.conf" # For newer packages
+
+echo ">>> Installing specified packages..."
+chroot_exec "emerge --noreplace $PACKAGES"
+
+# Enabling services and copying scripts
+echo ">>> Enabling services to start on boot..."
+chroot_exec "systemctl enable $SERVICES"
+
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  chroot_exec "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+fi
+
+# Create admin user
+if [[ -n "$ADMIN_USER" ]]; then
+  echo "Creating user $ADMIN_USER..."
+  chroot_exec "useradd -m -G wheel,video,audio,input -s /bin/bash "$ADMIN_USER""
+
+  if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
+    if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
+      chroot_exec "su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git""
+    elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
+      chroot_exec "su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config""
+    else
+      cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
+    fi
+    if [[ -n "$POST_INSTALL" ]]; then
+      chroot_exec "su - "$ADMIN_USER" -c "$POST_INSTALL""
+    fi
+  fi
+  chroot_exec "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
+
+  # Add user password interactively
+  echo ">>> Please set the password for $ADMIN_USER"
+  if [[ -n "$ADMIN_PASSWORD" ]]; then
+    chroot_exec "bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd""
+    echo ">>> Password defined in config. skipping..."
+  else
+    chroot_exec "passwd "$ADMIN_USER""
+  fi
+fi
+
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  chroot_exec "echo "$TIMEZONE" > /etc/timezone"
+  chroot_exec "emerge --config sys-libs/timezone-data"
+fi
+
+# Set locale
+echo ">>> Setting locale to en_US.UTF-8..."
+chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
+chroot_exec "locale-gen"
+chroot_exec "eselect locale set en_US.utf8"
+
+if [[ -n "$HOSTNAME" ]]; then
+  echo "Setting hostname to $HOSTNAME..."
+  echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
+fi
+
+# Add root password
+if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
+  echo ">>> Please set the password for the root user"
+  chroot_exec "passwd root"
+else
+  chroot_exec "passwd -d root"
+fi
+
+# Copy config to target system
+echo ">>> Copying a backup of the system image configuration to /etc/config.mkgentoosfs"
+cp "$1" "$BUILD_DIR/etc/config.mkgentoosfs" || true
+
+# Cleanup chroot mounts
+echo ">>> Cleaning up chroot mounts..."
+umount -R "$BUILD_DIR/dev"
+umount -R "$BUILD_DIR/sys"
+umount "$BUILD_DIR/proc"
+umount "$BUILD_DIR/tmp"
+
+# Creating SquashFS image
+echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
+  echo "Error: mksquashfs failed to create the image."
+  exit 1
+fi
+echo ">>> Cleaning up the build directory..."
+rm -rf "$BUILD_DIR"
+rm -f "/tmp/$STAGE3_TARBALL"
+echo "---"
+echo ">>> Success! ObsidianOS Gentoo system image created at: $(pwd)/$OUTPUT_SFS"
+echo ">>> Packages included: $PACKAGES"
