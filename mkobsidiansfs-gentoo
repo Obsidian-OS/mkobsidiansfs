@@ -127,17 +127,6 @@ chroot_exec "emerge --noreplace $PACKAGES"
 echo ">>> Enabling services to start on boot..."
 chroot_exec "systemctl enable $SERVICES"
 
-if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
-  echo ">>> Copying custom scripts to chroot..."
-  SCRIPT_TEMP_DIR="/root/custom_scripts"
-  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
-  echo ">>> Making custom scripts executable and running main.sh..."
-  chroot_exec "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
-  echo ">>> Cleaning up custom scripts from chroot..."
-  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-fi
-
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
@@ -165,6 +154,17 @@ if [[ -n "$ADMIN_USER" ]]; then
   else
     chroot_exec "passwd "$ADMIN_USER""
   fi
+fi
+
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR/*" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  chroot_exec "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
