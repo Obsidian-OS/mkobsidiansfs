@@ -73,20 +73,6 @@ if ! debootstrap --components=$DEBIAN_COMPONENTS --include=$PACKAGES $DEBIAN_REL
   exit 1
 fi
 
-# Enabling services and copying scripts
-echo ">>> Enabling services to start on boot..."
-chroot "$BUILD_DIR" systemctl enable $SERVICES
-if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
-  echo ">>> Copying custom scripts to chroot..."
-  SCRIPT_TEMP_DIR="/root/custom_scripts"
-  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
-  echo ">>> Making custom scripts executable and running main.sh..."
-  chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
-  echo ">>> Cleaning up custom scripts from chroot..."
-  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-fi
-
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
@@ -114,6 +100,20 @@ if [[ -n "$ADMIN_USER" ]]; then
   else
     chroot "$BUILD_DIR" passwd "$ADMIN_USER"
   fi
+fi
+
+# Enabling services and copying scripts
+echo ">>> Enabling services to start on boot..."
+chroot "$BUILD_DIR" systemctl enable $SERVICES
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR/*" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
