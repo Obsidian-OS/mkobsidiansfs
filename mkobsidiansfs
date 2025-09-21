@@ -73,20 +73,6 @@ if ! pacstrap -c -K "$BUILD_DIR" $PACKAGES; then
   exit 1
 fi
 
-# Enabling services and copying scripts
-echo ">>> Enabling services to start on boot..."
-arch-chroot "$BUILD_DIR" systemctl enable $SERVICES
-if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
-  echo ">>> Copying custom scripts to chroot..."
-  SCRIPT_TEMP_DIR="/root/custom_scripts"
-  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
-  echo ">>> Making custom scripts executable and running main.sh..."
-  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
-  echo ">>> Cleaning up custom scripts from chroot..."
-  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-fi
-
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
@@ -145,6 +131,20 @@ fi
 if [[ -n "$HOSTNAME" ]]; then
   echo "Setting hostname to $HOSTNAME..."
   echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
+fi
+
+# Enabling services and copying scripts
+echo ">>> Enabling services to start on boot..."
+arch-chroot "$BUILD_DIR" systemctl enable $SERVICES
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
 
 # Add root password
