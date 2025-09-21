@@ -140,7 +140,7 @@ if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
   SCRIPT_TEMP_DIR="/root/custom_scripts"
   mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
-  cp -r "$CUSTOM_SCRIPTS_DIR" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  cp -r "$CUSTOM_SCRIPTS_DIR/*" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
   echo ">>> Making custom scripts executable and running main.sh..."
   arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
   echo ">>> Cleaning up custom scripts from chroot..."
