@@ -70,7 +70,7 @@ zypper --root "$COPY" --gpg-auto-import-keys ref
 # Bootstrapping system
 echo ">>> Bootstrapping the base system with zypper..."
 echo ">>> This may take some time, depending on your internet connection."
-if ! pacstrap -c -K "$BUILD_DIR" $PACKAGES; then
+if !  zypper --non-interactive --gpg-auto-import-keys --root "$COPY" install -y $PACKAGES; then
   echo "Error: zypper failed to install the base system."
   exit 1
 fi
