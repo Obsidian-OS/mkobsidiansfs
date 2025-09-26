@@ -23,7 +23,7 @@ check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-PACKAGES="patterns-base-base grub2-x86_64-efi grub2 grub2-common kernel-default networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts git gptfdisk f2fs-tools"
+PACKAGES="patterns-base grub2-x86_64-efi grub2 grub2-common kernel-default networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts git gptfdisk f2fs-tools"
 OUTPUT_SFS="system.sfs"   # Output SquashFS
 TIMEZONE=""               # Olson Timezone
 HOSTNAME="datrockisSUSe"    # Hostname
@@ -66,11 +66,11 @@ mkdir -p "$BUILD_DIR"
 echo ">>> Adding Tumbleweed repos..."
 zypper --root "$BUILD_DIR" ar -f https://download.opensuse.org/tumbleweed/repo/oss/ Tumbleweed-OSS
 zypper --root "$BUILD_DIR" ar -f https://download.opensuse.org/tumbleweed/repo/non-oss/ Tumbleweed-NonOSS
-zypper --root "$COPY" --gpg-auto-import-keys ref
+zypper --root "$BUILD_DIR" --gpg-auto-import-keys ref
 # Bootstrapping system
 echo ">>> Bootstrapping the base system with zypper..."
 echo ">>> This may take some time, depending on your internet connection."
-if !  zypper --non-interactive --gpg-auto-import-keys --root "$COPY" install -y $PACKAGES; then
+if !  zypper --non-interactive --gpg-auto-import-keys --root "$BUILD_DIR" install -y $PACKAGES; then
   echo "Error: zypper failed to install the base system."
   exit 1
 fi
