@@ -129,7 +129,7 @@ fi
 
 if [[ -n "$PACKAGES" ]]; then
   echo "Installing extra packages: $PACKAGES"
-  chroot "$BUILD_DIR" "apt install $PACKAGES"
+  chroot "$BUILD_DIR" apt install $PACKAGES
 fi
 
 # Add root password
