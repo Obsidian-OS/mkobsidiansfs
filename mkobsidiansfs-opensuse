@@ -54,7 +54,7 @@ fi
 # Check for needed commands
 check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch Linux"
 check_command zypper "zypper is provided by zypper on Arch Linux."
-check_command arch=chroot "arch-chroot is provided by arch-install-scripts on Arch Linux."
+check_command arch-chroot "arch-chroot is provided by arch-install-scripts on Arch Linux."
 
 # Clean up build directories to start creating the filesystem
 echo ">>> Cleaning up any previous build directories..."
