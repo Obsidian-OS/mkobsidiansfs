@@ -23,13 +23,13 @@ check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="./obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-PACKAGES="xbps f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
-OUTPUT_SFS="system.sfs"   # Output SquashFS
+PACKAGES="xbps grub-x86_64-efi f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
+OUTPUT_SFS="system.sfs" # Output SquashFS
 ROOTFS="https://repo-default.voidlinux.org/live/current/"
 REPO="REPO=https://repo-default.voidlinux.org/current"
 ARCH="ARCH=x86_64"
 TIMEZONE=""               # Olson Timezone
-HOSTNAME="obsidian-void"    # Hostname
+HOSTNAME="obsidian-void"  # Hostname
 SERVICES="NetworkManager" # Services to enable with systemctl
 ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
@@ -64,17 +64,15 @@ rm -rf "$BUILD_DIR"
 rm -f "$OUTPUT_SFS"
 mkdir -p "$BUILD_DIR"
 
-
-
 # Bootstrapping system
 echo ">>> Bootstrapping the base system..."
 echo ">>> This may take some time, depending on your internet connection."
-curl -s https://repo-default.voidlinux.org/live/current/ \
-   | grep -oP 'void-x86_64-ROOTFS-\d+\.tar\.xz' \
-   | sort -V \
-   | tail -n1 \
-   | xargs -I{} curl -L https://repo-default.voidlinux.org/live/current/{} \
-   | tar -xJ -C "$BUILD_DIR"
+curl -s https://repo-default.voidlinux.org/live/current/ |
+  grep -oP 'void-x86_64-ROOTFS-\d+\.tar\.xz' |
+  sort -V |
+  tail -n1 |
+  xargs -I{} curl -L https://repo-default.voidlinux.org/live/current/{} |
+  tar -xJ -C "$BUILD_DIR"
 xbps-install -Sur "$BUILD_DIR" $PACKAGES
 
 # Create admin user
@@ -93,7 +91,7 @@ if [[ -n "$ADMIN_USER" ]]; then
     if [[ -n "$POST_INSTALL" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
-fi
+  fi
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
 
@@ -139,7 +137,7 @@ fi
 
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
-cp "$1" "$BUILD_DIR/etc/config.mkobsfs"||true
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs" || true
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
