@@ -56,7 +56,6 @@ fi
 
 # Check for needed commands
 check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch Linux"
-check_command xbps-install "xbps is part of the xbps package on Arch Linux AUR."
 check_command arch-chroot "arch-chroot is part of the arch-install-scripts package on Arch Linux."
 
 # Clean up build directories to start creating the filesystem
@@ -68,18 +67,15 @@ mkdir -p "$BUILD_DIR"
 
 
 # Bootstrapping system
-echo ">>> Bootstrapping the base system with pacstrap..."
+echo ">>> Bootstrapping the base system..."
 echo ">>> This may take some time, depending on your internet connection."
-if ! curl -s https://repo-default.voidlinux.org/live/current/ \
+curl -s https://repo-default.voidlinux.org/live/current/ \
    | grep -oP 'void-x86_64-ROOTFS-\d+\.tar\.xz' \
    | sort -V \
    | tail -n1 \
    | xargs -I{} curl -L https://repo-default.voidlinux.org/live/current/{} \
-   | tar -xJ -C "$BUILD_DIR" \
-   | xbps-install -S $PACKAGES; then
-  echo "Error: xbps failed to install the base system."
-  exit 1
-fi
+   | tar -xJ -C "$BUILD_DIR"
+xbps-install -r "$BUILD_DIR" $PACKAGES
 
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
