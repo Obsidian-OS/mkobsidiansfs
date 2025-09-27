@@ -22,14 +22,14 @@ fi
 check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
-BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-PACKAGES="f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
+BUILD_DIR="./obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
+PACKAGES="xbps f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
 OUTPUT_SFS="system.sfs"   # Output SquashFS
 ROOTFS="https://repo-default.voidlinux.org/live/current/"
 REPO="REPO=https://repo-default.voidlinux.org/current"
 ARCH="ARCH=x86_64"
 TIMEZONE=""               # Olson Timezone
-HOSTNAME="obsidianbtw"    # Hostname
+HOSTNAME="obsidian-void"    # Hostname
 SERVICES="NetworkManager" # Services to enable with systemctl
 ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
@@ -41,7 +41,7 @@ ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HO
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
-POST_INSTALL="" # Line of bash to execute after installation is done
+POST_INSTALL=" ln -s /etc/runit/sv/NetworkManager /run/runit/NetworkManager" # Line of bash to execute after installation is done
 
 # Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
@@ -75,7 +75,7 @@ curl -s https://repo-default.voidlinux.org/live/current/ \
    | tail -n1 \
    | xargs -I{} curl -L https://repo-default.voidlinux.org/live/current/{} \
    | tar -xJ -C "$BUILD_DIR"
-xbps-install -r "$BUILD_DIR" $PACKAGES
+xbps-install -Sur "$BUILD_DIR" $PACKAGES
 
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
@@ -97,26 +97,6 @@ fi
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
 
-  if [[ -n "$HAVE_AUR" ]]; then
-    # Bind-mount the roofs on itself.
-    mount --bind "$BUILD_DIR" "$BUILD_DIR"
-    # Create a temp script inside the chroot for yay build and install
-    arch-chroot "$BUILD_DIR" sh -c "cat > /home/$ADMIN_USER/install-yay.sh" <<'EOF'
-#!/bin/bash
-cd ~
-git clone --branch yay-bin --single-branch https://github.com/archlinux/aur.git yay-bin
-cd yay-bin
-makepkg --noconfirm --skippgpcheck -si
-EOF
-    arch-chroot "$BUILD_DIR" chmod +x /home/$ADMIN_USER/install-yay.sh
-    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "/home/$ADMIN_USER/install-yay.sh"
-    if [[ -n "$YAY_GET" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "yay -S --noconfirm $YAY_GET"
-      touch "$BUILD_DIR/obsidianctl-aur-installed"
-    fi
-    arch-chroot "$BUILD_DIR" rm /home/$ADMIN_USER/install-yay.sh
-  fi
-
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
@@ -129,7 +109,6 @@ fi
 
 if [[ -n "$TIMEZONE" ]]; then
   echo "Setting timezone to $TIMEZONE..."
-  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
 fi
 
 if [[ -n "$HOSTNAME" ]]; then
@@ -139,7 +118,6 @@ fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-arch-chroot "$BUILD_DIR" systemctl enable $SERVICES
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
   SCRIPT_TEMP_DIR="/root/custom_scripts"
