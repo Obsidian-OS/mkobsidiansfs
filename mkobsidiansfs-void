@@ -114,6 +114,11 @@ if [[ -n "$HOSTNAME" ]]; then
   echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
 fi
 
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
+fi
+
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
