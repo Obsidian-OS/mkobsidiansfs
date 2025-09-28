@@ -41,7 +41,7 @@ ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HO
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
-POST_INSTALL=" ln -s /etc/runit/sv/NetworkManager /run/runit/NetworkManager" # Line of bash to execute after installation is done
+POST_INSTALL=" ln -s /etc/sv/NetworkManager /var/service/" # Line of bash to execute after installation is done
 
 # Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
