@@ -27,7 +27,7 @@ DEBIAN_RELEASE="trixie"                            # Debian release to bootstrap
 DEBIAN_MIRROR="http://deb.debian.org/debian"       # Debian mirror
 DEBIAN_COMPONENTS="main,contrib,non-free-firmware" # Debian components
 # Below is default packages for a minimal Debian install and this script to work.
-PACKAGES="grub-efi efibootmgr"                                                                                                                                                                                                                                      # append to it. do not modify
+PACKAGES="grub-efi efibootmgr" # append to it. do not modify
 ESSENTIAL_PACKAGES="debian-archive-keyring,systemd-sysv,dbus,sudo,vim,nano,python3,squashfs-tools,git,gdisk,ca-certificates,network-manager,linux-image-amd64,coreutils,firmware-linux,firmware-linux-nonfree,firmware-iwlwifi,firmware-realtek,firmware-brcm80211" # please i beg you do not edit
 OUTPUT_SFS="system.sfs"                                                                                                                                                                                                                                             # Output SquashFS
 TIMEZONE=""                                                                                                                                                                                                                                                         # Olson Timezone
