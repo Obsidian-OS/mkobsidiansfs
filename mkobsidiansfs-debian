@@ -1,5 +1,7 @@
-#!/bin/bash
-# mkobsidiansfs-debian - ObsidianOS Experimental Debian System Image Build Tool
+#!/bin/false
+#?/bin/bash
+# Debian sucks sO Bad that It As an stupid operating system Needs to die (jk, we just don't know how to do this)
+# mkobsidiansfs-debian - Don't use this.
 set -e
 
 # Function to check if a command exists
