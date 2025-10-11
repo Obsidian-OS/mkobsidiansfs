@@ -58,7 +58,11 @@ if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
   echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
   STAGE3_BASE_URL="https://distfiles.gentoo.org/releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-systemd/"
   STAGE3_FILENAME=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-desktop-systemd/ |
+# STAGE3_BASE_URL="https://distfiles.gentoo.org/releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-openrc/"
+# STAGE3_FILENAME=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-desktop-openrc/ |
+
     grep -o "\"stage3-$GENTOO_ARCH-desktop-systemd.*\.tar\.xz\"" |
+   #grep -o "\"stage3-$GENTOO_ARCH-desktop-openrc.*\.tar\.xz\"" |
     sed 's/^.\(.*\).$/\1/')
   if [[ -z "$STAGE3_FILENAME" ]]; then
     echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
@@ -112,7 +116,7 @@ chroot_exec "emerge --sync"
 echo ">>> Selecting Gentoo profile: $GENTOO_PROFILE"
 chroot_exec "eselect profile set $GENTOO_PROFILE"
 
-#chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards" For AMD
+chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards" For AMD
 #chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards" For NVIDIA
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
 chroot_exec "echo 'MAKEOPTS="-j$(nproc)"' >> /etc/portage/make.conf"
