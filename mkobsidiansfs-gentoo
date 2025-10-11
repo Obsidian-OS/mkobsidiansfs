@@ -28,6 +28,7 @@ ACCEPT_LICENSE="*"
 GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
 GENTOO_PROFILE="default/linux/amd64/23.0/desktop/systemd" # Gentoo release
+#GENTOO_PROFILE="default/linux/amd64/23.0/desktop/openrc" # Gentoo release
 # Below is default packages for a minimal Gentoo desktop install and this script to work.
 PACKAGES="sys-apps/baselayout net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools dev-vcs/git sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/linux-firmware sys-kernel/gentoo-kernel-bin sys-boot/efibootmgr"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
@@ -57,7 +58,11 @@ if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
   echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
   STAGE3_BASE_URL="https://distfiles.gentoo.org/releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-systemd/"
   STAGE3_FILENAME=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-desktop-systemd/ |
+# STAGE3_BASE_URL="https://distfiles.gentoo.org/releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-openrc/"
+# STAGE3_FILENAME=$(curl -s https://distfiles.gentoo.org/releases/amd64/autobuilds/current-stage3-amd64-desktop-openrc/ |
+
     grep -o "\"stage3-$GENTOO_ARCH-desktop-systemd.*\.tar\.xz\"" |
+   #grep -o "\"stage3-$GENTOO_ARCH-desktop-openrc.*\.tar\.xz\"" |
     sed 's/^.\(.*\).$/\1/')
   if [[ -z "$STAGE3_FILENAME" ]]; then
     echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
@@ -111,13 +116,17 @@ chroot_exec "emerge --sync"
 echo ">>> Selecting Gentoo profile: $GENTOO_PROFILE"
 chroot_exec "eselect profile set $GENTOO_PROFILE"
 
+chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards" For AMD
+#chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards" For NVIDIA
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
 chroot_exec "echo 'MAKEOPTS="-j$(nproc)"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES="${FEATURES} getbinpkg"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES="${FEATURES} binpkg-request-signature"' >> /etc/portage/make.conf"
 chroot_exec "echo 'LICENSE_ACCEPT="~$ACCEPT_LICENSE"' >> /etc/portage/make.conf" # For newer packages
 chroot_exec "echo 'GRUB_PLATFORMS="efi-64"' >> /etc/portage/make.conf"
 chroot_exec "echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" | tee -a /etc/portage/package.license"
 chroot_exec "echo "sys-kernel/installkernel dracut grub" | tee -a /etc/portage/package.use/installkernel"
-chroot_exec "echo 'ACCEPT_KEYWORDS="~$GENTOO_ARCH"' >> /etc/portage/make.conf" # For newer packages
+#chroot_exec "echo 'ACCEPT_KEYWORDS="~$GENTOO_ARCH"' >> /etc/portage/make.conf" # For newer packages
 
 echo ">>> Installing specified packages..."
 chroot_exec "emerge --noreplace $PACKAGES"
