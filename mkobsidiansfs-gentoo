@@ -116,6 +116,8 @@ chroot_exec "eselect profile set $GENTOO_PROFILE"
 #chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards" For NVIDIA
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
 chroot_exec "echo 'MAKEOPTS="-j$(nproc)"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES="${FEATURES} getbinpkg"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES="${FEATURES} binpkg-request-signature"' >> /etc/portage/make.conf"
 chroot_exec "echo 'LICENSE_ACCEPT="~$ACCEPT_LICENSE"' >> /etc/portage/make.conf" # For newer packages
 chroot_exec "echo 'GRUB_PLATFORMS="efi-64"' >> /etc/portage/make.conf"
 chroot_exec "echo "sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE" | tee -a /etc/portage/package.license"
