@@ -1,6 +1,4 @@
-#!/bin/false
-#?/bin/bash
-# Debian sucks sO Bad that It As an stupid operating system Needs to die (jk, we just don't know how to do this)
+#!/bin/bash
 # mkobsidiansfs-debian - Don't use this.
 set -e
 
@@ -29,7 +27,7 @@ DEBIAN_RELEASE="trixie"                            # Debian release to bootstrap
 DEBIAN_MIRROR="http://deb.debian.org/debian"       # Debian mirror
 DEBIAN_COMPONENTS="main,contrib,non-free-firmware" # Debian components
 # Below is default packages for a minimal Debian install and this script to work.
-PACKAGES="debian-archive-keyring,systemd-sysv,dbus,sudo,vim,nano,efibootmgr,python3,squashfs-tools,git,gdisk,ca-certificates,network-manager,linux-image-amd64,coreutils,firmware-linux,firmware-linux-nonfree,firmware-iwlwifi,firmware-realtek,firmware-brcm80211,grub-efi,efibootmgr"
+PACKAGES="debian-archive-keyring,systemd-sysv,dbus,sudo,vim,nano,efibootmgr,python3,squashfs-tools,git,gdisk,ca-certificates,network-manager,linux-image-amd64,coreutils,firmware-linux,firmware-linux-nonfree,firmware-iwlwifi,firmware-realtek,firmware-brcm80211,grub-efi,efibootmgr,grub-efi-amd64,grub-efi-amd64-bin,grub-common,grub2-common"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-debian" # Hostname
