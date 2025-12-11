@@ -26,8 +26,9 @@ BUILD_DIR="/tmp/obsidian_rootfs_debian"            # SquashFS generation directo
 DEBIAN_RELEASE="trixie"                            # Debian release to bootstrap
 DEBIAN_MIRROR="http://deb.debian.org/debian"       # Debian mirror
 DEBIAN_COMPONENTS="main,contrib,non-free-firmware" # Debian components
+DEBIAN_ARCH="amd64"                                # Debian CPU Arch
 # Below is default packages for a minimal Debian install and this script to work.
-PACKAGES="debian-archive-keyring,systemd-sysv,dbus,sudo,vim,nano,efibootmgr,python3,squashfs-tools,git,gdisk,ca-certificates,network-manager,linux-image-amd64,coreutils,firmware-linux,firmware-linux-nonfree,firmware-iwlwifi,firmware-realtek,firmware-brcm80211,grub-efi,efibootmgr,grub-efi-amd64,grub-efi-amd64-bin,grub-common,grub2-common"
+PACKAGES="debian-archive-keyring,systemd-sysv,dbus,sudo,vim,nano,efibootmgr,python3,squashfs-tools,git,gdisk,ca-certificates,network-manager,linux-image-amd64,coreutils,firmware-linux,firmware-linux-nonfree,firmware-iwlwifi,firmware-realtek,firmware-brcm80211,grub-efi,efibootmgr,grub-efi-$DEBIAN_ARCH,grub-efi-$DEBIAN_ARCH-bin,grub-common,grub2-common"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-debian" # Hostname
@@ -68,7 +69,7 @@ mkdir -p "$BUILD_DIR"
 # Bootstrapping system
 echo ">>> Bootstrapping the base system with debootstrap..."
 echo ">>> This may take some time, depending on your internet connection."
-if ! debootstrap --components=$DEBIAN_COMPONENTS --include=$PACKAGES $DEBIAN_RELEASE "$BUILD_DIR" $DEBIAN_MIRROR; then
+if ! debootstrap --components=$DEBIAN_COMPONENTS --arch=$DEBIAN_ARCH --include=$PACKAGES $DEBIAN_RELEASE "$BUILD_DIR" $DEBIAN_MIRROR; then
   echo "Error: debootstrap failed to install the base system."
   exit 1
 fi
