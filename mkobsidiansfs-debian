@@ -134,6 +134,8 @@ else
   chroot "$BUILD_DIR" passwd -d root
 fi
 
+chroot "$BUILD_DIR" ln -sf /sbin/grub-* /usr/bin/
+
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkdobsfs"
 cp "$1" "$BUILD_DIR/etc/config.mkdobsfs" || true
