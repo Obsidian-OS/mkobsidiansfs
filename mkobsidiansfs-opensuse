@@ -141,6 +141,10 @@ fi
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs-opensuse"
 cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse" || true
 
+# regenerate initramfs
+echo ">>> Regenerating initramfs"
+arch-chroot "$BUILD_DIR" dracut --force
+
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
