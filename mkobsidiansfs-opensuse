@@ -143,7 +143,8 @@ cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse" || true
 
 # regenerate initramfs
 echo ">>> Regenerating initramfs"
-arch-chroot "$BUILD_DIR" dracut --force
+KERNEL=$(ls "$BUILD_DIR/lib/modules" | sort -V | tail -n1)
+arch-chroot "$BUILD_DIR" dracut --force /boot/initramfs-$KERNEL.img $KERNEL
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
