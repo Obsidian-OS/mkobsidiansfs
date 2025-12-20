@@ -26,7 +26,7 @@ BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is defa
 PACKAGES="patterns-base-base python3 grub2-x86_64-efi grub2 grub2-common kernel-default NetworkManager sudo vim nano efibootmgr squashfs arch-install-scripts git gptfdisk f2fs-tools"
 OUTPUT_SFS="system.sfs"   # Output SquashFS
 TIMEZONE=""               # Olson Timezone
-HOSTNAME="datrockisSUSe"    # Hostname
+HOSTNAME="datrockisSUSe"  # Hostname
 SERVICES="NetworkManager" # Services to enable with systemctl
 ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
@@ -38,7 +38,7 @@ ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HO
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
-POST_INSTALL="" # Line of bash to execute after installation is done
+POST_INSTALL='dracut --force /boot/initramfs-$(uname -r).img $(uname -r)' # Line of bash to execute after installation is done. MAKE SURE TO DO "$POST_INSTALL && ....."
 
 # Import settings from file. File extention: something.mkobsfs-opensuse
 if [[ "$1" != "" ]]; then
@@ -70,7 +70,7 @@ zypper --root "$BUILD_DIR" --gpg-auto-import-keys ref
 # Bootstrapping system
 echo ">>> Bootstrapping the base system with zypper..."
 echo ">>> This may take some time, depending on your internet connection."
-if !  zypper --non-interactive --gpg-auto-import-keys --root "$BUILD_DIR" install -y $PACKAGES; then
+if ! zypper --non-interactive --gpg-auto-import-keys --root "$BUILD_DIR" install -y $PACKAGES; then
   echo "Error: zypper failed to install the base system."
   exit 1
 fi
@@ -91,7 +91,7 @@ if [[ -n "$ADMIN_USER" ]]; then
     if [[ -n "$POST_INSTALL" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
-fi
+  fi
   arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
   arch-chroot "$BUILD_DIR" visudo -c
 
@@ -139,7 +139,7 @@ fi
 
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs-opensuse"
-cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse"||true
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse" || true
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
