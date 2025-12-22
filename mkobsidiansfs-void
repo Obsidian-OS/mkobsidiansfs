@@ -126,7 +126,6 @@ fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-arch-chroot "$BUILD_DIR" mkdir -p /var/service/ || true
 for service in $SERVICES; do
   arch-chroot "$BUILD_DIR" ln -sf /etc/sv/$service /var/service/
 done
