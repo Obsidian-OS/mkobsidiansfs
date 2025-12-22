@@ -55,7 +55,7 @@ if [[ "$2" != "" ]]; then
   echo ">>> Custom sfs output: $2"
 fi
 
-if [[ -n "$oos-nopass" ]]; then 
+if [[ -n "$oos-nopass" ]]; then
   ROOT_HAVEPASSWORD="yesssssss"
   echo ">>> No password enabled via env var."
 fi
@@ -126,9 +126,9 @@ fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-mkdir -p "$BUILD_DIR/var/service"
+arch-chroot "$BUILD_DIR" mkdir -p /var/service/ || true
 for service in $SERVICES; do
-  arch-chroot "$BUILD_DIR" ln -s /etc/sv/$service /var/service/
+  arch-chroot "$BUILD_DIR" ln -sf /etc/sv/$service /var/service/
 done
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
