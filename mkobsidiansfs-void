@@ -126,10 +126,8 @@ fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-arch-chroot "$BUILD_DIR" rm -f /var/service
-arch-chroot "$BUILD_DIR" mkdir -p /var/service
 for service in $SERVICES; do
-  arch-chroot "$BUILD_DIR" ln -sf /etc/sv/$service /var/service/
+  arch-chroot "$BUILD_DIR" ln -sf /etc/sv/$service /etc/runit/runsvdir/default
 done
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
