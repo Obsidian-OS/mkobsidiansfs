@@ -55,7 +55,10 @@ if [[ "$2" != "" ]]; then
   OUTPUT_SFS="$2"
   echo ">>> Custom sfs output: $2"
 fi
-
+if [[ -n "$oos-nopass" ]]; then
+  ROOT_HAVEPASSWORD="yesssssss"
+  echo ">>> No password enabled via env var."
+fi
 # Check for needed commands
 check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Debian and Arch."
 check_command debootstrap "debootstrap is part of the debootstrap package on Debian and Arch."

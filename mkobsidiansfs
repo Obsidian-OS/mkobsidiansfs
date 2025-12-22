@@ -53,6 +53,10 @@ if [[ "$2" != "" ]]; then
   OUTPUT_SFS="$2"
   echo ">>> Custom sfs output: $2"
 fi
+if [[ -n "$oos-nopass" ]]; then
+  ROOT_HAVEPASSWORD="yesssssss"
+  echo ">>> No password enabled via env var."
+fi
 
 # Check for needed commands
 check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch Linux"
