@@ -28,21 +28,21 @@ OUTPUT_SFS="system.sfs" # Output SquashFS
 ROOTFS="https://repo-default.voidlinux.org/live/current/"
 REPO="REPO=https://repo-default.voidlinux.org/current"
 ARCH="ARCH=x86_64"
-TIMEZONE=""               # Olson Timezone
-HOSTNAME="obsidian-void"  # Hostname
-SERVICES="NetworkManager" # Services to enable with systemctl
-ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
-CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER=""             # Creates an user with the 'wheel' group
-ADMIN_DOTFILES=""         # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_PASSWORD=""         # Password to set for ADMIN_USER, if empty will ask interactively
-ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+TIMEZONE=""                    # Olson Timezone
+HOSTNAME="obsidian-void"       # Hostname
+SERVICES="dbus NetworkManager" # Services to enable with runit
+ROOT_HAVEPASSWORD=""           # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""          # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER=""                  # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""              # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""              # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""         # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
 # JUST ADD TO THIS LINE, IF YOU REMOVE THE STUFF IN POST INSTALL YOU WON'T HAVE ACCESS TO INTERNET ON BOOT
-POST_INSTALL="ln -s /etc/sv/dbus /var/service/;ln -s /etc/sv/NetworkManager /var/service/;vsv start NetworkManager" # Line of bash to execute after installation is done
+POST_INSTALL="" # Line of bash to execute after installation is done
 
 # Import settings from file. File extention: something.mkobsfs
 if [[ "$1" != "" ]]; then
@@ -126,6 +126,10 @@ fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
+mkdir -p "$BUILD_DIR/var/service"
+for service in $SERVICES; do
+  arch-chroot "$BUILD_DIR" ln -s /etc/sv/$service /var/service/
+done
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
   SCRIPT_TEMP_DIR="/root/custom_scripts"
