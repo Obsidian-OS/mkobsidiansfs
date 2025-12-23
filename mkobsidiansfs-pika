@@ -1,5 +1,5 @@
 #!/bin/bash
-# mkobsidianfs - ObsidianOS System Image Build Tool
+# mkobsidiansfs-pika
 set -e
 
 # Function to check if a command exists
@@ -18,33 +18,29 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-# Check if git is installed (needed for dotfiles or AUR)
+# Check if git is installed (needed for dotfiles)
 check_command git
-
-# Default Settings. Do not edit, source a script that just edits these files.
-BUILD_DIR="./obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-PACKAGES="xbps grub-x86_64-efi linux dracut openssl f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
-OUTPUT_SFS="system.sfs" # Output SquashFS
-ROOTFS="https://repo-default.voidlinux.org/live/current/"
-REPO="REPO=https://repo-default.voidlinux.org/current"
-ARCH="ARCH=x86_64"
-TIMEZONE=""                    # Olson Timezone
-HOSTNAME="obsidian-void"       # Hostname
-SERVICES="dbus NetworkManager" # Services to enable with runit
-ROOT_HAVEPASSWORD=""           # Set this to anything other than blank to remove the password from the root user.
-CUSTOM_SCRIPTS_DIR=""          # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER=""                  # Creates an user with the 'wheel' group
-ADMIN_DOTFILES=""              # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_PASSWORD=""              # Password to set for ADMIN_USER, if empty will ask interactively
-ADMIN_DOTFILES_TYPE=""         # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+DOCKER_LOCATION="git.pika-os.com/repo-tools/docker-images/pikaos-base:nestv3"
+# Below is default packages for a minimal Debian install and this script to work.
+BUILD_DIR="mkobsfs-pika"
+PACKAGES="grub-efi efibootmgr grub-common grub2-common grub-efi-amd64 grub-efi-amd64-bin pika-baseos"
+OUTPUT_SFS="system.sfs"    # Output SquashFS
+TIMEZONE=""                # Olson Timezone
+HOSTNAME="obsidian-debian" # Hostname
+SERVICES="NetworkManager"  # Services to enable with systemctl
+ROOT_HAVEPASSWORD=""       # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""      # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER=""              # Creates an user with the 'sudo' group
+ADMIN_DOTFILES=""          # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""          # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""     # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
 #     recommended: set this to $SUDO_USER if this is being run with sudo.
-# JUST ADD TO THIS LINE, IF YOU REMOVE THE STUFF IN POST INSTALL YOU WON'T HAVE ACCESS TO INTERNET ON BOOT
-POST_INSTALL="" # Line of bash to execute after installation is done
+POST_INSTALL="echo \"#!/bin/sh\ncd /boot || exit 1\nln -sf vmlinuz-linux vmlinuz\nln -sf initramfs-linux.img initrd.img\nexit 0\" > /etc/kernel/postinst.d/99-update-symlinks && chmod +x /etc/kernel/postinst.d/99-update-symlinks && /etc/kernel/postinst.d/99-update-symlinks " # Line of bash to execute after installation is done (DO NOT OVERRIDE, ADD TO IT.)
 
-# Import settings from file. File extention: something.mkobsfs
+# Import settings from file. File extention: something.mkdobsfs
 if [[ "$1" != "" ]]; then
   source "$1"
   echo ">>> Custom config file specified: $1"
@@ -54,14 +50,13 @@ if [[ "$2" != "" ]]; then
   OUTPUT_SFS="$2"
   echo ">>> Custom sfs output: $2"
 fi
-
 if [[ -n "$oosnopass" ]]; then
   ROOT_HAVEPASSWORD="yesssssss"
   echo ">>> No password enabled via env var."
 fi
 # Check for needed commands
-check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch Linux"
-check_command arch-chroot "arch-chroot is part of the arch-install-scripts package on Arch Linux."
+check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Debian and Arch."
+check_command podman "podman is part of the podman package on Debian and Arch."
 
 # Clean up build directories to start creating the filesystem
 echo ">>> Cleaning up any previous build directories..."
@@ -70,20 +65,28 @@ rm -f "$OUTPUT_SFS"
 mkdir -p "$BUILD_DIR"
 
 # Bootstrapping system
-echo ">>> Bootstrapping the base system..."
+# Mostly taken from https://git.pika-os.com/images/live-iso-gnome/src/branch/main/generate_roofs_from_nestv3_docker.sh
+echo ">>> Bootstrapping the base system with podman..."
 echo ">>> This may take some time, depending on your internet connection."
-curl -s https://repo-default.voidlinux.org/live/current/ |
-  grep -oP 'void-x86_64-ROOTFS-\d+\.tar\.xz' |
-  sort -V |
-  tail -n1 |
-  xargs -I{} curl -L https://repo-default.voidlinux.org/live/current/{} |
-  tar -xJ -C "$BUILD_DIR"
-xbps-install -Sur "$BUILD_DIR" $PACKAGES
+mkdir -p "$BUILD_DIR"
+# Pull and mount docker image
+podman --storage-driver=vfs pull "$DOCKER_LOCATION"
+podman --storage-driver=vfs image mount "$(basename $DOCKER_LOCATION)" > ./docker-merged-path
+DOCKER_MERGED_PATH=$(cat ./docker-merged-path)
+# Safely Copy merged path contents to rootfs
+rsync -av $DOCKER_MERGED_PATH/* $BUILD_DIR/
+# Clean up Docker specific things
+rm -rfv $BUILD_DIR/etc/apt/preferences.d/*docker*
+rm -rfv $BUILD_DIR/etc/apt/apt.conf.d/*docker*
+rm -rfv $BUILD_DIR/etc/dpkg/dpkg.cfg.d/*docker*
+arch-chroot "$BUILD_DIR" apt update
+arch-chroot "$BUILD_DIR" apt upgrade -y
+arch-chroot "$BUILD_DIR" apt install $PACKAGES -y
 
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
-  arch-chroot "$BUILD_DIR" useradd -m -G wheel -s /bin/bash "$ADMIN_USER"
+  arch-chroot "$BUILD_DIR" useradd -m -G sudo -s /bin/bash "$ADMIN_USER"
 
   if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
@@ -97,8 +100,7 @@ if [[ -n "$ADMIN_USER" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
   fi
-  arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
-  arch-chroot "$BUILD_DIR" visudo -c
+  arch-chroot "$BUILD_DIR" sh -c "echo '%sudo ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
 
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
@@ -110,25 +112,9 @@ if [[ -n "$ADMIN_USER" ]]; then
   fi
 fi
 
-if [[ -n "$TIMEZONE" ]]; then
-  echo "Setting timezone to $TIMEZONE..."
-fi
-
-if [[ -n "$HOSTNAME" ]]; then
-  echo "Setting hostname to $HOSTNAME..."
-  echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
-fi
-
-if [[ -n "$TIMEZONE" ]]; then
-  echo "Setting timezone to $TIMEZONE..."
-  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
-fi
-
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-for service in $SERVICES; do
-  arch-chroot "$BUILD_DIR" ln -sf /etc/sv/$service /etc/runit/runsvdir/default
-done
+arch-chroot "$BUILD_DIR" systemctl enable $SERVICES
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   echo ">>> Copying custom scripts to chroot..."
   SCRIPT_TEMP_DIR="/root/custom_scripts"
@@ -140,6 +126,16 @@ if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
 
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
+fi
+
+if [[ -n "$HOSTNAME" ]]; then
+  echo "Setting hostname to $HOSTNAME..."
+  echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
+fi
+
 # Add root password
 if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
   echo ">>> Please set the password for the root user"
@@ -148,9 +144,11 @@ else
   arch-chroot "$BUILD_DIR" passwd -d root
 fi
 
+arch-chroot "$BUILD_DIR" ln -sf /sbin/grub-* /usr/bin/
+
 # Copy config to target system
-echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
-cp "$1" "$BUILD_DIR/etc/config.mkobsfs" || true
+echo ">>> Copying a backup of the system image configuration to /etc/config.mkdobsfs"
+cp "$1" "$BUILD_DIR/etc/config.mkdobsfs" || true
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
@@ -159,8 +157,7 @@ if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(npro
   exit 1
 fi
 echo ">>> Cleaning up the build directory..."
-umount "$BUILD_DIR" || echo ">>> Not mounted. proceeding..."
 rm -rf "$BUILD_DIR"
 echo "---"
-echo ">>> Success! ObsidianOS system image created at: $(pwd)/$OUTPUT_SFS"
+echo ">>> Success! Debian system image created at: $(pwd)/$OUTPUT_SFS"
 echo ">>> Packages included: $PACKAGES"

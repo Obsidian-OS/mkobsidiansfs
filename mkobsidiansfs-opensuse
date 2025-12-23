@@ -51,7 +51,7 @@ if [[ "$2" != "" ]]; then
   echo ">>> Custom sfs output: $2"
 fi
 
-if [[ -n "$oos-nopass" ]]; then 
+if [[ -n "$oosnopass" ]]; then
   ROOT_HAVEPASSWORD="yesssssss"
   echo ">>> No password enabled via env var."
 fi
