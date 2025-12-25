@@ -24,16 +24,16 @@ check_command git
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
 PACKAGES="patterns-base-base python3 grub2-x86_64-efi grub2 grub2-common kernel-default NetworkManager sudo vim nano efibootmgr squashfs arch-install-scripts git gptfdisk f2fs-tools dracut"
-OUTPUT_SFS="system.sfs"   # Output SquashFS
-TIMEZONE=""               # Olson Timezone
-HOSTNAME="datrockisSUSe"  # Hostname
-SERVICES="NetworkManager" # Services to enable with systemctl
-ROOT_HAVEPASSWORD=""      # Set this to anything other than blank to remove the password from the root user.
-CUSTOM_SCRIPTS_DIR=""     # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER=""             # Creates an user with the 'wheel' group
-ADMIN_DOTFILES=""         # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_PASSWORD=""         # Password to set for ADMIN_USER, if empty will ask interactively
-ADMIN_DOTFILES_TYPE=""    # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+OUTPUT_SFS="system.sfs"      # Output SquashFS
+TIMEZONE=""                  # Olson Timezone
+HOSTNAME="obsidian-opensuse" # Hostname
+SERVICES="NetworkManager"    # Services to enable with systemctl
+ROOT_HAVEPASSWORD="no"       # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""        # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER="user"            # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""            # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD="root"        # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""       # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
