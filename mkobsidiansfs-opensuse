@@ -148,6 +148,7 @@ cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse" || true
 
 # regenerate initramfs
 echo ">>> Regenerating initramfs"
+arch-chroot sed -i 's/^hostonly=.*/hostonly="no"/' /etc/dracut.conf # disables hostonly mode
 KERNEL=$(ls "$BUILD_DIR/lib/modules" | sort -V | tail -n1)
 arch-chroot "$BUILD_DIR" dracut --force /boot/initramfs-$KERNEL.img $KERNEL
 
