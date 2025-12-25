@@ -30,9 +30,9 @@ HOSTNAME="obsidian-opensuse" # Hostname
 SERVICES="NetworkManager"    # Services to enable with systemctl
 ROOT_HAVEPASSWORD="no"       # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""        # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER="user"            # Creates an user with the 'wheel' group
+ADMIN_USER=""                # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""            # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_PASSWORD="root"        # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_PASSWORD=""            # Password to set for ADMIN_USER, if empty will ask interactively
 ADMIN_DOTFILES_TYPE=""       # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
@@ -148,7 +148,7 @@ cp "$1" "$BUILD_DIR/etc/config.mkobsfs-opensuse" || true
 
 # regenerate initramfs
 echo ">>> Regenerating initramfs"
-arch-chroot sed -i 's/^hostonly=.*/hostonly="no"/' /etc/dracut.conf # disables hostonly mode
+arch-chroot "$BUILD_DIR" sed -i 's/^hostonly=.*/hostonly="no"/' /etc/dracut.conf # disables hostonly mode
 KERNEL=$(ls "$BUILD_DIR/lib/modules" | sort -V | tail -n1)
 arch-chroot "$BUILD_DIR" dracut --force /boot/initramfs-$KERNEL.img $KERNEL
 
