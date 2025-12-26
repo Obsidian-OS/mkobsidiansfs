@@ -161,7 +161,7 @@ if [[ -n "$ADMIN_USER" ]]; then
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
-    chroot_exec "bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd""
+    chroot_exec "bash -c \"echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd\""
     echo ">>> Password defined in config. skipping..."
   else
     chroot_exec "passwd "$ADMIN_USER""
