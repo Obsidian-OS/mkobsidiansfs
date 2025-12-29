@@ -80,7 +80,7 @@ fi
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
-  chroot "$BUILD_DIR" useradd -m -G sudo -s /bin/bash "$ADMIN_USER"
+  chroot "$BUILD_DIR" /sbin/useradd -m -G sudo -s /bin/bash "$ADMIN_USER"
 
   if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
