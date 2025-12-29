@@ -19,7 +19,7 @@ fi
 check_command git
 
 BUILD_DIR="obsidian_rootfs"
-PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv"
+PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv steamos-customizations holo-keyring steamos-manager plasma gamescope lib32-gamescope"
 HAVE_AUR="yay-bin"
 YAY_GET="obsidianctl-git plugind-git obsidianwall-git obsidian-control"
 OUTPUT_SFS="system.sfs"
@@ -74,7 +74,7 @@ cat >"$PACMAN_CONF" <<EOF
 HoldPkg     = pacman glibc
 Architecture = x86_64
 CheckSpace
-SigLevel    = Required DatabaseOptional
+SigLevel    = Never
 LocalFileSigLevel = Optional
 
 [core-${STEAMOS_VERSION}]
