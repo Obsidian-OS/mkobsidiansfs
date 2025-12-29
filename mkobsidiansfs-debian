@@ -99,7 +99,7 @@ if [[ -n "$ADMIN_USER" ]]; then
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
-    chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
+    chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | /sbin/chpasswd"
     echo ">>> Password defined in config. skipping..."
   else
     chroot "$BUILD_DIR" passwd "$ADMIN_USER"
