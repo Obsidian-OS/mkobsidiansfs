@@ -19,7 +19,7 @@ fi
 check_command git
 
 BUILD_DIR="obsidian_rootfs"
-PACKAGES="base linux-neptune linux-firmware-neptune networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv steamos-customizations holo-keyring steamos-manager plasma gamescope lib32-gamescope btrfs-progs dosfstools exfatprogs steamos-efi steamos-powerbuttond jupiter-dock-updater-bin jupiter-fan-control jupiter-firewall jupiter-hw-support steamdeck-dsp steam-jupiter-stable steam-im-modules-jupiter bluez amd-ucode-neptune-jupiter cups bluez-cups"
+PACKAGES="base linux-neptune linux-firmware-neptune networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv steamos-customizations holo-keyring steamos-manager plasma gamescope lib32-gamescope btrfs-progs dosfstools exfatprogs steamos-efi steamos-powerbuttond jupiter-dock-updater-bin jupiter-fan-control jupiter-firewall jupiter-hw-support steamdeck-dsp steam-jupiter-stable bluez cups bluez-cups"
 HAVE_AUR="yay-bin"
 YAY_GET="obsidianctl-git plugind-git obsidianwall-git obsidian-control"
 OUTPUT_SFS="system.sfs"
