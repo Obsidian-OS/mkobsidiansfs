@@ -1,0 +1,248 @@
+#!/bin/bash
+set -e
+
+check_command() {
+  local cmd="$1"
+  local extra_msg="$2"
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Error: Required command '$cmd' not found. Please install it."
+    [[ -n "$extra_msg" ]] && echo "$extra_msg"
+    exit 1
+  fi
+}
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This script must be run as root."
+  exit 1
+fi
+
+check_command git
+
+BUILD_DIR="obsidian_rootfs"
+PACKAGES="base linux linux-firmware networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv"
+HAVE_AUR="yay-bin"
+YAY_GET="obsidianctl-git plugind-git obsidianwall-git obsidian-control"
+OUTPUT_SFS="system.sfs"
+TIMEZONE=""
+NETUPDATE=""
+HOSTNAME="obsidianbtw"
+SERVICES="NetworkManager gpm plugind"
+ROOT_HAVEPASSWORD=""
+CUSTOM_SCRIPTS_DIR=""
+ADMIN_USER="user"
+ADMIN_DOTFILES=""
+ADMIN_PASSWORD=""
+ADMIN_DOTFILES_TYPE=""
+POST_INSTALL=""
+
+STEAMOS_MIRROR="https://steamdeck-packages.steamos.cloud/archlinux-mirror"
+STEAMOS_VERSION="3.8"
+
+if [[ "$1" != "" ]]; then
+  source "$1"
+  echo ">>> Custom config file specified: $1"
+fi
+
+if [[ "$2" != "" ]]; then
+  OUTPUT_SFS="$2"
+  echo ">>> Custom sfs output: $2"
+fi
+
+if [[ -n "$oosnopass" ]]; then
+  ROOT_HAVEPASSWORD="yesssssss"
+  echo ">>> No password enabled via env var."
+fi
+
+check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch Linux"
+check_command pacstrap "pacstrap is part of the arch-install-scripts package on Arch Linux."
+check_command arch-chroot "arch-chroot is part of the arch-install-scripts package on Arch Linux."
+
+echo ">>> Cleaning up any previous build directories..."
+rm -rf "$BUILD_DIR"
+rm -f "$OUTPUT_SFS"
+mkdir -p "$BUILD_DIR"
+echo ">>> Creating SteamOS pacman configuration..."
+PACMAN_CONF=$(mktemp)
+STEAMOS_MIRRORLIST=$(mktemp)
+ARCH_MIRRORLIST=$(mktemp)
+
+echo "Server = ${STEAMOS_MIRROR}/\$repo/os/\$arch" > "$STEAMOS_MIRRORLIST"
+echo "Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch" > "$ARCH_MIRRORLIST"
+
+cat > "$PACMAN_CONF" <<EOF
+[options]
+HoldPkg     = pacman glibc
+Architecture = x86_64
+CheckSpace
+SigLevel    = Required DatabaseOptional
+LocalFileSigLevel = Optional
+
+[core-${STEAMOS_VERSION}]
+Server = ${STEAMOS_MIRROR}/core-${STEAMOS_VERSION}/os/\$arch
+
+[extra-${STEAMOS_VERSION}]
+Server = ${STEAMOS_MIRROR}/extra-${STEAMOS_VERSION}/os/\$arch
+
+[multilib-${STEAMOS_VERSION}]
+Server = ${STEAMOS_MIRROR}/multilib-${STEAMOS_VERSION}/os/\$arch
+
+[jupiter-${STEAMOS_VERSION}]
+Server = ${STEAMOS_MIRROR}/jupiter-${STEAMOS_VERSION}/os/\$arch
+
+[holo-${STEAMOS_VERSION}]
+Server = ${STEAMOS_MIRROR}/holo-${STEAMOS_VERSION}/os/\$arch
+
+[core]
+Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
+
+[extra]
+Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
+
+[multilib]
+Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
+EOF
+
+echo ">>> Bootstrapping SteamOS ${STEAMOS_VERSION} base system with pacstrap..."
+echo ">>> This may take some time, depending on your internet connection."
+if ! pacstrap -C "$PACMAN_CONF" -M -c -K "$BUILD_DIR" $PACKAGES; then
+  echo "Error: pacstrap failed to install the base system."
+  rm -f "$PACMAN_CONF" "$STEAMOS_MIRRORLIST" "$ARCH_MIRRORLIST"
+  exit 1
+fi
+
+mkdir -p "$BUILD_DIR/etc/pacman.d"
+cp "$STEAMOS_MIRRORLIST" "$BUILD_DIR/etc/pacman.d/steamos-mirrorlist"
+cp "$ARCH_MIRRORLIST" "$BUILD_DIR/etc/pacman.d/mirrorlist"
+
+cat > "$BUILD_DIR/etc/pacman.conf" <<EOF
+[options]
+HoldPkg     = pacman glibc
+Architecture = x86_64
+CheckSpace
+SigLevel    = Required DatabaseOptional
+LocalFileSigLevel = Optional
+
+[core-${STEAMOS_VERSION}]
+Include = /etc/pacman.d/steamos-mirrorlist
+
+[extra-${STEAMOS_VERSION}]
+Include = /etc/pacman.d/steamos-mirrorlist
+
+[multilib-${STEAMOS_VERSION}]
+Include = /etc/pacman.d/steamos-mirrorlist
+
+[jupiter-${STEAMOS_VERSION}]
+Include = /etc/pacman.d/steamos-mirrorlist
+
+[holo-${STEAMOS_VERSION}]
+Include = /etc/pacman.d/steamos-mirrorlist
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+EOF
+
+rm -f "$PACMAN_CONF" "$STEAMOS_MIRRORLIST" "$ARCH_MIRRORLIST"
+if [[ -n "$ADMIN_USER" ]]; then
+  echo "Creating user $ADMIN_USER..."
+  arch-chroot "$BUILD_DIR" useradd -m -G wheel -s /bin/bash "$ADMIN_USER"
+
+  if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
+    if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
+    elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
+    else
+      cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
+    fi
+    if [[ -n "$POST_INSTALL" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
+    fi
+  fi
+
+  arch-chroot "$BUILD_DIR" sh -c "echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers"
+  arch-chroot "$BUILD_DIR" visudo -c
+
+  if [[ -n "$HAVE_AUR" ]]; then
+    mount --bind "$BUILD_DIR" "$BUILD_DIR"
+    arch-chroot "$BUILD_DIR" sh -c "cat > /home/$ADMIN_USER/install-yay.sh" <<'EOF'
+#!/bin/bash
+cd ~
+git clone --branch yay-bin --single-branch https://github.com/archlinux/aur.git yay-bin
+cd yay-bin
+makepkg --noconfirm --skippgpcheck -si
+EOF
+    arch-chroot "$BUILD_DIR" chmod +x /home/$ADMIN_USER/install-yay.sh
+    arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "/home/$ADMIN_USER/install-yay.sh"
+    if [[ -n "$YAY_GET" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "yay -S --noconfirm $YAY_GET"
+      touch "$BUILD_DIR/obsidianctl-aur-installed"
+    fi
+    arch-chroot "$BUILD_DIR" rm /home/$ADMIN_USER/install-yay.sh
+  fi
+
+  echo ">>> Please set the password for $ADMIN_USER"
+  if [[ -n "$ADMIN_PASSWORD" ]]; then
+    arch-chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
+    echo ">>> Password defined in config. skipping..."
+  else
+    arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  fi
+fi
+
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
+fi
+
+if [[ -n "$HOSTNAME" ]]; then
+  echo "Setting hostname to $HOSTNAME..."
+  echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
+fi
+
+echo ">>> Enabling services to start on boot..."
+arch-chroot "$BUILD_DIR" systemctl enable $SERVICES
+
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR"/* "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+fi
+
+if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
+  echo ">>> Please set the password for the root user"
+  arch-chroot "$BUILD_DIR" passwd root
+else
+  arch-chroot "$BUILD_DIR" passwd -d root
+fi
+
+echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs"||true
+
+if [[ -n "$NETUPDATE" ]]; then
+  echo ">>> Enabling obsidianctl netupdate."
+  touch "$BUILD_DIR/etc/obsidianctl-netupdate-enable-DONOTDELETE"
+fi
+
+echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
+  echo "Error: mksquashfs failed to create the image."
+  exit 1
+fi
+
+echo ">>> Cleaning up the build directory..."
+umount "$BUILD_DIR" || echo ">>> Not mounted. proceeding..."
+rm -rf "$BUILD_DIR"
+echo "---"
+echo ">>> Success! SteamOS ${STEAMOS_VERSION} system image created at: $(pwd)/$OUTPUT_SFS"
+echo ">>> Packages included: $PACKAGES"
