@@ -19,7 +19,7 @@ fi
 check_command git
 
 BUILD_DIR="obsidian_rootfs"
-PACKAGES="base linux-neptune linux-firmware-neptune networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv steamos-customizations holo-keyring steamos-manager plasma gamescope lib32-gamescope btrfs-progs dosfstools exfatprogs steamos-efi steamos-powerbuttond jupiter-dock-updater-bin jupiter-fan-control jupiter-firewall jupiter-hw-support steamdeck-dsp steam-jupiter-stable bluez cups bluez-cups"
+PACKAGES="base networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv btrfs-progs dosfstools exfatprogs"
 HAVE_AUR="yay-bin"
 YAY_GET="obsidianctl-git plugind-git obsidianwall-git obsidian-control"
 OUTPUT_SFS="system.sfs"
@@ -34,9 +34,13 @@ ADMIN_DOTFILES=""
 ADMIN_PASSWORD=""
 ADMIN_DOTFILES_TYPE=""
 POST_INSTALL=""
-
-STEAMOS_MIRROR="https://steamdeck-packages.steamos.cloud/archlinux-mirror"
-STEAMOS_VERSION="main" # latest SteamOS
+STEAMOS_VERSION="main"                                                     # latest SteamOS
+STEAMOS_MIRROR="https://steamdeck-packages.steamos.cloud/archlinux-mirror" # please do not change
+REPO_PACKAGES="jupiter-$STEAMOS_VERSION holo-$STEAMOS_VERSION"             # repos to fully install everything inside it
+for repo in $REPO_PACKAGES; do
+  PACKAGES+=" $(pacman -Sl "$repo" | awk '{print $2}')"
+done
+PACKAGES=$(echo $PACKAGES) # weird ass hack to remove extra spaces lmfao
 
 if [[ "$1" != "" ]]; then
   source "$1"
