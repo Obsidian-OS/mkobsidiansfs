@@ -20,7 +20,7 @@ check_command git
 
 BUILD_DIR="obsidian_rootfs"
 PACKAGES="base networkmanager sudo vim nano efibootmgr python squashfs-tools arch-install-scripts base-devel git gptfdisk f2fs-tools grub gpm wget os-prober pv btrfs-progs dosfstools exfatprogs"
-EXCLUDED_PACKAGES="calamares-settings-steamos-git|fwupd_minimal|[^[:space:]]+-debug|.*-jupiter.*|pipewire-jack-client|plasma-wayland-session|steam-jupiter-oobe|steamos-kdumpst-layer|powerbuttond|renderdoc-minimal|drm_info-git"
+EXCLUDED_PACKAGES="calamares-settings-steamos-git|fwupd_minimal|[^[:space:]]+-debug|.*-jupiter.*|pipewire-jack-client|plasma-wayland-session|steam-jupiter-oobe|steamos-kdumpst-layer|powerbuttond|renderdoc-minimal|drm_info-git|ds-inhibit"
 HAVE_AUR="yay-bin"
 YAY_GET="obsidianctl-git plugind-git obsidianwall-git obsidian-control"
 OUTPUT_SFS="system.sfs"
