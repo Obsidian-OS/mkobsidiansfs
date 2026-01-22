@@ -23,7 +23,7 @@ check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="./obsidian_rootfs" # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-PACKAGES="xbps grub-x86_64-efi linux dracut openssl f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk"
+PACKAGES="xbps grub-x86_64-efi linux dracut openssl f2fs-tools python grub vsv NetworkManager vim nano efibootmgr git gptfdisk sbctl"
 OUTPUT_SFS="system.sfs" # Output SquashFS
 ROOTFS="https://repo-default.voidlinux.org/live/current/"
 REPO="REPO=https://repo-default.voidlinux.org/current"
