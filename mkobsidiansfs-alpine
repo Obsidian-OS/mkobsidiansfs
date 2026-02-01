@@ -1,0 +1,182 @@
+#!/bin/bash
+# mkobsidianfs - ObsidianOS System Image Build Tool
+set -e
+readonly ALPINE_KEYS='
+alpine-devel@lists.alpinelinux.org-4a6a0840.rsa.pub:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1yHJxQgsHQREclQu4Ohe\nqxTxd1tHcNnvnQTu/UrTky8wWvgXT+jpveroeWWnzmsYlDI93eLI2ORakxb3gA2O\nQ0Ry4ws8vhaxLQGC74uQR5+/yYrLuTKydFzuPaS1dK19qJPXB8GMdmFOijnXX4SA\njixuHLe1WW7kZVtjL7nufvpXkWBGjsfrvskdNA/5MfxAeBbqPgaq0QMEfxMAn6/R\nL5kNepi/Vr4S39Xvf2DzWkTLEK8pcnjNkt9/aafhWqFVW7m3HCAII6h/qlQNQKSo\nGuH34Q8GsFG30izUENV9avY7hSLq7nggsvknlNBZtFUcmGoQrtx3FmyYsIC8/R+B\nywIDAQAB
+alpine-devel@lists.alpinelinux.org-5261cecb.rsa.pub:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwlzMkl7b5PBdfMzGdCT0\ncGloRr5xGgVmsdq5EtJvFkFAiN8Ac9MCFy/vAFmS8/7ZaGOXoCDWbYVLTLOO2qtX\nyHRl+7fJVh2N6qrDDFPmdgCi8NaE+3rITWXGrrQ1spJ0B6HIzTDNEjRKnD4xyg4j\ng01FMcJTU6E+V2JBY45CKN9dWr1JDM/nei/Pf0byBJlMp/mSSfjodykmz4Oe13xB\nCa1WTwgFykKYthoLGYrmo+LKIGpMoeEbY1kuUe04UiDe47l6Oggwnl+8XD1MeRWY\nsWgj8sF4dTcSfCMavK4zHRFFQbGp/YFJ/Ww6U9lA3Vq0wyEI6MCMQnoSMFwrbgZw\nwwIDAQAB
+alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub:MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAutQkua2CAig4VFSJ7v54\nALyu/J1WB3oni7qwCZD3veURw7HxpNAj9hR+S5N/pNeZgubQvJWyaPuQDm7PTs1+\ntFGiYNfAsiibX6Rv0wci3M+z2XEVAeR9Vzg6v4qoofDyoTbovn2LztaNEjTkB+oK\ntlvpNhg1zhou0jDVYFniEXvzjckxswHVb8cT0OMTKHALyLPrPOJzVtM9C1ew2Nnc\n3848xLiApMu3NBk0JqfcS3Bo5Y2b1FRVBvdt+2gFoKZix1MnZdAEZ8xQzL/a0YS5\nHd0wj5+EEKHfOd3A75uPa/WQmA+o0cBFfrzm69QDcSJSwGpzWrD1ScH3AK8nWvoj\nv7e9gukK/9yl1b4fQQ00vttwJPSgm9EnfPHLAtgXkRloI27H6/PuLoNvSAMQwuCD\nhQRlyGLPBETKkHeodfLoULjhDi1K2gKJTMhtbnUcAA7nEphkMhPWkBpgFdrH+5z4\nLxy+3ek0cqcI7K68EtrffU8jtUj9LFTUC8dERaIBs7NgQ/LfDbDfGh9g6qVj1hZl\nk9aaIPTm/xsi8v3u+0qaq7KzIBc9s59JOoA8TlpOaYdVgSQhHHLBaahOuAigH+VI\nisbC9vmqsThF2QdDtQt37keuqoda2E6sL7PUvIyVXDRfwX7uMDjlzTxHTymvq2Ck\nhtBqojBnThmjJQFgZXocHG8CAwEAAQ==
+'
+# thanks to https://github.com/alpinelinux/alpine-make-rootfs
+dump_alpine_keys() {
+	local dest_dir="$1"
+	local content file line
+	mkdir -p "$dest_dir"
+	for line in $ALPINE_KEYS; do
+		file=${line%%:*}
+		content=${line#*:}
+		printf -- "-----BEGIN PUBLIC KEY-----\n$content\n-----END PUBLIC KEY-----\n" \
+			> "$dest_dir/$file"
+	done
+}
+
+# Function to check if a command exists
+check_command() {
+  local cmd="$1"
+  local extra_msg="$2"
+  if ! command -v "$cmd" &>/dev/null; then
+    echo "Error: Required command '$cmd' not found. Please install it."
+    [[ -n "$extra_msg" ]] && echo "$extra_msg"
+    exit 1
+  fi
+}
+
+if [[ $EUID -ne 0 ]]; then
+  echo "This script must be run as root."
+  exit 1
+fi
+
+# Check if git is installed (needed for dotfiles or AUR)
+check_command git
+
+# Default Settings. Do not edit, source a script that just edits these files.
+BUILD_DIR="obsidian_rootfs"                                             # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
+ARCH="$(uname -m)"                                                      # CPU Architecture
+VERSION="latest-stable"                                                 # Alpine Version (latest-stable, edge, or a specific Alpine version)
+MIRROR="https://dl-cdn.alpinelinux.org/alpine"                          # Alpine Package Mirror
+PACKAGES="alpine-base alpine-release alpine-sdk arch-install-scripts linux-stable networkmanager sudo vim nano efibootmgr python3 squashfs-tools grub-efi gptfdisk f2fs-tools grub gpm wget pv sbctl mkinitfs"
+OUTPUT_SFS="system.sfs"                                                 # Output SquashFS
+TIMEZONE=""                                                             # Olson Timezone
+HOSTNAME="alpinebtw"                                                    # Hostname
+SERVICES="networking networkmanager gpm plugind"                        # Services to enable with systemctl
+ROOT_HAVEPASSWORD=""                                                    # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""                                                   # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER="user"                                                       # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""                                                       # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""                                                       # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""                                                  # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+# HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
+# CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
+# * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
+#     recommended: set this to $SUDO_USER if this is being run with sudo.
+POST_INSTALL="" # Line of bash to execute after installation is done
+
+# Import settings from file. File extention: something.mkobsfs
+if [[ "$1" != "" ]]; then
+  source "$1"
+  echo ">>> Custom config file specified: $1"
+fi
+
+if [[ "$2" != "" ]]; then
+  OUTPUT_SFS="$2"
+  echo ">>> Custom sfs output: $2"
+fi
+if [[ -n "$oosnopass" ]]; then
+  ROOT_HAVEPASSWORD="yesssssss"
+  echo ">>> No password enabled via env var."
+fi
+
+# Check for needed commands
+check_command mksquashfs "mksquashfs is prodvided by squashfs-tools on Arch and Alpine"
+check_command apk "apk is the Alpine package manager. (apk-tools)"
+
+# Clean up build directories to start creating the filesystem
+echo ">>> Cleaning up any previous build directories..."
+rm -rf "$BUILD_DIR"
+rm -f "$OUTPUT_SFS"
+mkdir -p "$BUILD_DIR"
+
+# Bootstrapping system
+echo ">>> Bootstrapping the base system with apk..."
+echo ">>> This may take some time, depending on your internet connection."
+if ! apk add --root "$BUILD_DIR" -X $MIRROR/$VERSION/main/ -X $MIRROR/$VERSION/community/ -U --allow-untrusted --initdb --arch $ARCH $PACKAGES; then
+  echo "Error: apk failed to install the base system."
+  exit 1
+fi
+
+mkdir -p "$BUILD_DIR/etc/apk/keys/"
+cat > "$BUILD_DIR/etc/apk/repositories" <'EOF'
+$MIRROR/$VERSION/main
+$MIRROR/$VERSION/community
+EOF
+chmod 644 "$BUILD_DIR/etc/apk/repositories"
+dump_alpine_keys "$BUILD_DIR/etc/apk/keys/"
+arch-chroot "$BUILD_DIR" apk update
+# Create admin user
+if [[ -n "$ADMIN_USER" ]]; then
+  echo "Creating user $ADMIN_USER..."
+  arch-chroot "$BUILD_DIR" /bin/sh -c "adduser -D -G wheel -s /bin/bash $ADMIN_USER"
+
+  if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
+    if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
+    elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
+    else
+      cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
+    fi
+    if [[ -n "$POST_INSTALL" ]]; then
+      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
+    fi
+  fi
+  echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> "$BUILD_DIR/etc/sudoers"
+  # Add user password interactively
+  echo ">>> Please set the password for $ADMIN_USER"
+  if [[ -n "$ADMIN_PASSWORD" ]]; then
+    arch-chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
+    echo ">>> Password defined in config. skipping..."
+  else
+    arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+  fi
+fi
+
+if [[ -n "$TIMEZONE" ]]; then
+  echo "Setting timezone to $TIMEZONE..."
+  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
+fi
+
+if [[ -n "$HOSTNAME" ]]; then
+  echo "Setting hostname to $HOSTNAME..."
+  echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
+fi
+
+# Enabling services and copying scripts
+echo ">>> Enabling services to start on boot..."
+for service in $SERVICES; do
+  arch-chroot "$BUILD_DIR" rc-update add "$service" default || echo ">>> Service $service not found, skipping..."
+done
+
+if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
+  echo ">>> Copying custom scripts to chroot..."
+  SCRIPT_TEMP_DIR="/root/custom_scripts"
+  mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+  cp -r "$CUSTOM_SCRIPTS_DIR/*" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
+  echo ">>> Making custom scripts executable and running main.sh..."
+  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  echo ">>> Cleaning up custom scripts from chroot..."
+  rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
+fi
+
+# Add root password
+if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
+  echo ">>> Please set the password for the root user"
+  arch-chroot "$BUILD_DIR" passwd root
+else
+  arch-chroot "$BUILD_DIR" passwd -d root
+fi
+
+# Copy config to target system
+echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
+cp "$1" "$BUILD_DIR/etc/config.mkobsfs" || true
+
+# Creating SquashFS image
+echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
+  echo "Error: mksquashfs failed to create the image."
+  exit 1
+fi
+echo ">>> Cleaning up the build directory..."
+umount "$BUILD_DIR" || echo ">>> Not mounted. proceeding..."
+rm -rf "$BUILD_DIR"
+echo "---"
+echo ">>> Success! ObsidianOS system image created at: $(pwd)/$OUTPUT_SFS"
+echo ">>> Packages included: $PACKAGES"
