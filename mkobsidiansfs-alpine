@@ -8,15 +8,15 @@ alpine-devel@lists.alpinelinux.org-6165ee59.rsa.pub:MIICIjANBgkqhkiG9w0BAQEFAAOC
 '
 # thanks to https://github.com/alpinelinux/alpine-make-rootfs
 dump_alpine_keys() {
-	local dest_dir="$1"
-	local content file line
-	mkdir -p "$dest_dir"
-	for line in $ALPINE_KEYS; do
-		file=${line%%:*}
-		content=${line#*:}
-		printf -- "-----BEGIN PUBLIC KEY-----\n$content\n-----END PUBLIC KEY-----\n" \
-			> "$dest_dir/$file"
-	done
+  local dest_dir="$1"
+  local content file line
+  mkdir -p "$dest_dir"
+  for line in $ALPINE_KEYS; do
+    file=${line%%:*}
+    content=${line#*:}
+    printf -- "-----BEGIN PUBLIC KEY-----\n$content\n-----END PUBLIC KEY-----\n" \
+      >"$dest_dir/$file"
+  done
 }
 
 # Function to check if a command exists
@@ -39,21 +39,21 @@ fi
 check_command git
 
 # Default Settings. Do not edit, source a script that just edits these files.
-BUILD_DIR="obsidian_rootfs"                                             # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
-ARCH="$(uname -m)"                                                      # CPU Architecture
-VERSION="latest-stable"                                                 # Alpine Version (latest-stable, edge, or a specific Alpine version)
-MIRROR="https://dl-cdn.alpinelinux.org/alpine"                          # Alpine Package Mirror
+BUILD_DIR="obsidian_rootfs"                    # SquashFS generation directory # Below is default packages for an install of arch and this script to work.
+ARCH="$(uname -m)"                             # CPU Architecture
+VERSION="latest-stable"                        # Alpine Version (latest-stable, edge, or a specific Alpine version)
+MIRROR="https://dl-cdn.alpinelinux.org/alpine" # Alpine Package Mirror
 PACKAGES="alpine-base alpine-release alpine-sdk arch-install-scripts linux-stable networkmanager sudo vim nano efibootmgr python3 squashfs-tools grub-efi gptfdisk f2fs-tools grub gpm wget pv sbctl mkinitfs"
-OUTPUT_SFS="system.sfs"                                                 # Output SquashFS
-TIMEZONE=""                                                             # Olson Timezone
-HOSTNAME="alpinebtw"                                                    # Hostname
-SERVICES="networking networkmanager gpm plugind"                        # Services to enable with systemctl
-ROOT_HAVEPASSWORD=""                                                    # Set this to anything other than blank to remove the password from the root user.
-CUSTOM_SCRIPTS_DIR=""                                                   # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER="user"                                                       # Creates an user with the 'wheel' group
-ADMIN_DOTFILES=""                                                       # If an admin is created, a git repo that will be cloned to the new user.
-ADMIN_PASSWORD=""                                                       # Password to set for ADMIN_USER, if empty will ask interactively
-ADMIN_DOTFILES_TYPE=""                                                  # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
+OUTPUT_SFS="system.sfs"                          # Output SquashFS
+TIMEZONE=""                                      # Olson Timezone
+HOSTNAME="alpinebtw"                             # Hostname
+SERVICES="networking networkmanager gpm plugind" # Services to enable with systemctl
+ROOT_HAVEPASSWORD=""                             # Set this to anything other than blank to remove the password from the root user.
+CUSTOM_SCRIPTS_DIR=""                            # Place where scripts that must run in the SquashFS will run.
+ADMIN_USER="user"                                # Creates an user with the 'wheel' group
+ADMIN_DOTFILES=""                                # If an admin is created, a git repo that will be cloned to the new user.
+ADMIN_PASSWORD=""                                # Password to set for ADMIN_USER, if empty will ask interactively
+ADMIN_DOTFILES_TYPE=""                           # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
 # HOME - the inside of the repo has data for your home directory (ex: .zshrc, .config, .bashrc)
 # CONFIG - the inside of the repo has data for your .config directory (ex: gtk, fish, kitty, hypr)
 # * - ignore dotfiles repo (can be empty string) and copy dotfiles from that user's home.
@@ -94,7 +94,7 @@ if ! apk add --root "$BUILD_DIR" -X $MIRROR/$VERSION/main/ -X $MIRROR/$VERSION/c
 fi
 
 mkdir -p "$BUILD_DIR/etc/apk/keys/"
-cat > "$BUILD_DIR/etc/apk/repositories" <'EOF'
+cat >"$BUILD_DIR/etc/apk/repositories" <<EOF
 $MIRROR/$VERSION/main
 $MIRROR/$VERSION/community
 EOF
@@ -118,7 +118,7 @@ if [[ -n "$ADMIN_USER" ]]; then
       arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
   fi
-  echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> "$BUILD_DIR/etc/sudoers"
+  echo '%wheel ALL=(ALL) NOPASSWD: ALL' >>"$BUILD_DIR/etc/sudoers"
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
