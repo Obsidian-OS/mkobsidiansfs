@@ -100,38 +100,37 @@ $MIRROR/$VERSION/community
 EOF
 chmod 644 "$BUILD_DIR/etc/apk/repositories"
 dump_alpine_keys "$BUILD_DIR/etc/apk/keys/"
-arch-chroot "$BUILD_DIR" apk update
 # Create admin user
 if [[ -n "$ADMIN_USER" ]]; then
   echo "Creating user $ADMIN_USER..."
-  arch-chroot "$BUILD_DIR" /bin/sh -c "adduser -D -G wheel -s /bin/bash $ADMIN_USER"
+  arch-chroot "$BUILD_DIR" /bin/sh -c "/usr/sbin/adduser -D -G wheel -s /bin/bash $ADMIN_USER"
 
   if [[ -n "$ADMIN_DOTFILES_TYPE" ]]; then
     if [[ "$ADMIN_DOTFILES_TYPE" == "HOME" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/dotfiles && cp -r ~/dotfiles/.??* ~/ && rm -rf ~/.git"
+      arch-chroot "$BUILD_DIR" /bin/su - "$ADMIN_USER" -c "/usr/bin/git clone '$ADMIN_DOTFILES' ~/dotfiles && /bin/busybox cp -r ~/dotfiles/.??* ~/ && /bin/busybox rm -rf ~/.git"
     elif [[ "$ADMIN_DOTFILES_TYPE" == "CONFIG" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "git clone '$ADMIN_DOTFILES' ~/.config"
+      arch-chroot "$BUILD_DIR" /bin/su - "$ADMIN_USER" -c "/usr/bin/git clone '$ADMIN_DOTFILES' ~/.config"
     else
       cp -r /home/"$ADMIN_DOTFILES_TYPE"/.??* "$BUILD_DIR/home/$ADMIN_USER/"
     fi
     if [[ -n "$POST_INSTALL" ]]; then
-      arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c "$POST_INSTALL"
+      arch-chroot "$BUILD_DIR" /bin/su - "$ADMIN_USER" -c "$POST_INSTALL"
     fi
   fi
   echo '%wheel ALL=(ALL) NOPASSWD: ALL' >>"$BUILD_DIR/etc/sudoers"
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
-    arch-chroot "$BUILD_DIR" bash -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
+    arch-chroot "$BUILD_DIR" /bin/sh -c "echo '${ADMIN_USER}:${ADMIN_PASSWORD}' | chpasswd"
     echo ">>> Password defined in config. skipping..."
   else
-    arch-chroot "$BUILD_DIR" passwd "$ADMIN_USER"
+    arch-chroot "$BUILD_DIR" /usr/bin/passwd "$ADMIN_USER"
   fi
 fi
 
 if [[ -n "$TIMEZONE" ]]; then
   echo "Setting timezone to $TIMEZONE..."
-  arch-chroot "$BUILD_DIR" ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
+  arch-chroot "$BUILD_DIR" /bin/ln -sf "/usr/share/zoneinfo/$TIMEZONE" "/etc/localtime"
 fi
 
 if [[ -n "$HOSTNAME" ]]; then
@@ -142,7 +141,7 @@ fi
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
 for service in $SERVICES; do
-  arch-chroot "$BUILD_DIR" rc-update add "$service" default || echo ">>> Service $service not found, skipping..."
+  arch-chroot "$BUILD_DIR" /sbin/rc-update add "$service" default || echo ">>> Service $service not found, skipping..."
 done
 
 if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
@@ -151,7 +150,7 @@ if [[ -n "$CUSTOM_SCRIPTS_DIR" ]]; then
   mkdir -p "$BUILD_DIR/$SCRIPT_TEMP_DIR"
   cp -r "$CUSTOM_SCRIPTS_DIR/*" "$BUILD_DIR/$SCRIPT_TEMP_DIR/"
   echo ">>> Making custom scripts executable and running main.sh..."
-  arch-chroot "$BUILD_DIR" bash -c "chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
+  arch-chroot "$BUILD_DIR" /bin/sh -c "/bin/chmod +x $SCRIPT_TEMP_DIR/* && $SCRIPT_TEMP_DIR/main.sh"
   echo ">>> Cleaning up custom scripts from chroot..."
   rm -rf "$BUILD_DIR/$SCRIPT_TEMP_DIR"
 fi
@@ -159,9 +158,9 @@ fi
 # Add root password
 if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
   echo ">>> Please set the password for the root user"
-  arch-chroot "$BUILD_DIR" passwd root
+  arch-chroot "$BUILD_DIR" /usr/bin/passwd root
 else
-  arch-chroot "$BUILD_DIR" passwd -d root
+  arch-chroot "$BUILD_DIR" /usr/bin/passwd -d root
 fi
 
 # Copy config to target system
