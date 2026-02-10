@@ -148,6 +148,9 @@ else
   arch-chroot "$BUILD_DIR" passwd -d root
 fi
 
+# branding
+arch-chroot "$BUILD_DIR" bash -c "curl -fsSL https://obsidianos.xyz/configure.sh | bash"
+
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkobsfs"
 cp "$1" "$BUILD_DIR/etc/config.mkobsfs" || true
