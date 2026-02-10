@@ -203,6 +203,9 @@ else
   chroot_exec "passwd -d root"
 fi
 
+# branding
+chroot_exec "curl -fsSL https://obsidianos.xyz/configure.sh | bash"
+
 # Copy config to target system
 echo ">>> Copying a backup of the system image configuration to /etc/config.mkgentoosfs"
 cp "$1" "$BUILD_DIR/etc/config.mkgentoosfs" || true
