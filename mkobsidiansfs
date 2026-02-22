@@ -116,7 +116,7 @@ EOF
     fi
     arch-chroot "$BUILD_DIR" rm /home/$ADMIN_USER/install-yay.sh
   fi
-
+  arch-chroot "$BUILD_DIR" su - "$ADMIN_USER" -c 'curl -fsSL https://obsidianos.xyz/configure.sh | bash'
   # Add user password interactively
   echo ">>> Please set the password for $ADMIN_USER"
   if [[ -n "$ADMIN_PASSWORD" ]]; then
@@ -136,9 +136,6 @@ if [[ -n "$HOSTNAME" ]]; then
   echo "Setting hostname to $HOSTNAME..."
   echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
 fi
-
-# branding
-arch-chroot "$BUILD_DIR" sudo su "$ADMIN_USER" -- bash -c "curl -fsSL https://obsidianos.xyz/configure.sh | bash"
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
