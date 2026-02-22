@@ -138,7 +138,7 @@ if [[ -n "$HOSTNAME" ]]; then
 fi
 
 # branding
-arch-chroot "$BUILD_DIR" bash -c "curl -fsSL https://obsidianos.xyz/configure.sh | bash"
+arch-chroot "$BUILD_DIR" sudo su "$ADMIN_USER" -- bash -c "curl -fsSL https://obsidianos.xyz/configure.sh | bash"
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
