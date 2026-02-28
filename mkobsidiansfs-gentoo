@@ -31,7 +31,7 @@ ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
 ENABLE_NVIDIA=""      # enable NVIDIA GPU Drivers
 GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
-GENTOO_PROFILE="default/linux/amd64/23.0/desktop/%init%" # Gentoo release, %ini% is a placeholder. do not touch %init%.
+GENTOO_PROFILE="default/linux/amd64/23.0/desktop/init" # Gentoo release, init is a placeholder. do not touch init.
 # Below is default packages for a minimal Gentoo desktop install and this script to work.
 PACKAGES="sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools dev-vcs/git sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/linux-firmware sys-kernel/gentoo-kernel-bin sys-boot/efibootmgr app-crypt/sbctl"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
@@ -116,8 +116,8 @@ chroot_exec() {
 echo ">>> Updating Portage tree..."
 chroot_exec "emerge --sync"
 
-echo ">>> Selecting Gentoo profile: ${GENTOO_PROFILE/%init%/$GENTOO_INIT}"
-chroot_exec "eselect profile set ${GENTOO_PROFILE/%init%/$GENTOO_INIT}"
+echo ">>> Selecting Gentoo profile: ${GENTOO_PROFILE/init/$GENTOO_INIT}"
+chroot_exec "eselect profile set ${GENTOO_PROFILE/init/$GENTOO_INIT}"
 if [[ "$ENABLE_AMDGPU" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards"
 fi
