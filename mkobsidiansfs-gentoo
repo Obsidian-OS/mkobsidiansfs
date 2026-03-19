@@ -33,7 +33,7 @@ GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fe
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
 GENTOO_PROFILE="default/linux/amd64/23.0/desktop/init" # Gentoo release, init is a placeholder. do not touch init.
 # Below is default packages for a minimal Gentoo desktop install and this script to work.
-PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut app-crypt/sbctl dev-build/make sys-block/parted"
+PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl dev-build/make sys-block/parted"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-gentoo" # Hostname
