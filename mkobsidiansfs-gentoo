@@ -209,6 +209,9 @@ if [[ "$GENTOO_INIT" == "systemd" ]]; then
 	chroot_exec "systemctl enable $SERVICES"
 elif [[ "$GENTOO_INIT" == "openrc" ]]; then
 	for s in $SERVICES; do chroot_exec "rc-update add \"$s\" default"; done
+	# Enable agetty on tty1-6 as per Gentoo wiki - openrc-init does not use
+	# /etc/inittab so getty processes must be started explicitly as services.
+	chroot_exec "cd /etc/init.d && for n in \$(seq 1 6); do ln -s agetty agetty.tty\$n; rc-update add agetty.tty\$n default; done"
 fi
 
 # Create admin user
@@ -277,11 +280,21 @@ if [[ -n "$HOSTNAME" ]]; then
 		# OpenRC reads hostname from /etc/openrc/conf.d/hostname
 		mkdir -p "$BUILD_DIR/etc/openrc/conf.d"
 		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/openrc/conf.d/hostname"
+		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/conf.d/hostname"
 	else
 		# systemd reads hostname from /etc/hostname
 		mkdir -p "$BUILD_DIR/etc/conf.d"
 		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/conf.d/hostname"
 	fi
+fi
+
+# OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
+# Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
+if [[ "$GENTOO_INIT" == "openrc" ]]; then
+	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
+	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
+	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
+	mkdir -p "$BUILD_DIR/run/etc_ab"
 fi
 
 # Add root password
