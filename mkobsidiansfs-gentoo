@@ -146,6 +146,16 @@ if [[ "$GENTOO_INIT" == "systemd" ]]; then
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
+	# Suppress ModemManager/WWAN plugin in NetworkManager via config.
+	# This avoids recompiling NM and works regardless of USE flags.
+	mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
+	cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
+[main]
+plugins=keyfile
+
+[device]
+wifi.backend=wpa_supplicant
+NMEOF
 fi
 chroot_exec "echo \"sys-fs/squashfs-tools lzma xz\" | tee -a /etc/portage/package.use/squashfs"
 chroot_exec "echo 'ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"' >> /etc/portage/make.conf"
