@@ -203,8 +203,6 @@ chroot_exec "emerge --noreplace $EMERGE_OPTS $PACKAGES" || {
 	chroot_exec "emerge --config sys-kernel/gentoo-kernel-bin" || echo ">>> WARN: emerge --config also failed, continuing anyway"
 }
 
-# Rebuild dracut initramfs with dmsquash-live so the ISO can boot the squashfs.
-# cdrom and isofs are required so dracut can read the USB/CD filesystem.
 echo ">>> Rebuilding dracut initramfs with dmsquash-live + cdrom/isofs drivers..."
 chroot_exec "mkdir -p /etc/dracut.conf.d && printf 'add_dracutmodules+=\" dmsquash-live \"\nadd_drivers+=\" cdrom isofs squashfs loop overlay \"\nhostonly=no\n' > /etc/dracut.conf.d/livecd.conf"
 if [[ "$GENTOO_INIT" == "systemd" ]]; then
@@ -323,13 +321,8 @@ chroot_exec "su - _obsidian_branding -c 'curl -fsSL https://obsidianos.xyz/confi
 chroot_exec "sed -i '/_obsidian_branding/d' /etc/sudoers"
 chroot_exec "userdel -r _obsidian_branding 2>/dev/null || true"
 
-# Install ObsidianOS-specific packages from source (equivalent of AUR packages on Arch)
 # These provide obsidianctl (installer), plugind, obsidianwall, and branding
 echo ">>> Installing ObsidianOS packages from source..."
-
-# Write the install script directly into the chroot, then run it as root.
-# obsidianctl is a Python script - clone it and symlink to /usr/local/bin.
-# installer is the GUI installer - clone and install its dependencies.
 cat > "$BUILD_DIR/tmp/_obsidian_install.sh" << 'INSTALL_EOF'
 #!/bin/bash
 
@@ -422,27 +415,8 @@ else
 	chroot_exec "rc-update add plugind default 2>/dev/null || true"
 fi
 
-# Create arch-chroot wrapper for obsidianctl compatibility.
-# obsidianctl hardcodes arch-chroot for GRUB installation; this wrapper
-# replicates its behaviour using standard chroot + manual bind mounts.
-mkdir -p "$BUILD_DIR/usr/local/bin"
-cat > "$BUILD_DIR/usr/local/bin/arch-chroot" << 'EOF'
-#!/bin/bash
-CHROOT="$1"
-shift
-mount -t proc /proc "$CHROOT/proc" 2>/dev/null || true
-mount --rbind /sys "$CHROOT/sys" 2>/dev/null || true
-mount --rbind /dev "$CHROOT/dev" 2>/dev/null || true
-chroot "$CHROOT" "$@"
-EXIT=$?
-umount -R "$CHROOT/proc" "$CHROOT/sys" "$CHROOT/dev" 2>/dev/null || true
-exit $EXIT
-EOF
-chmod +x "$BUILD_DIR/usr/local/bin/arch-chroot"
-
 # Create a systemd service to symlink the live squashfs to /etc/system.sfs
 # so obsidianctl can find it at its expected path on every live boot.
-# On OpenRC this is handled differently via a local.d script.
 if [[ "$GENTOO_INIT" == "systemd" ]]; then
 mkdir -p "$BUILD_DIR/etc/systemd/system"
 cat > "$BUILD_DIR/etc/systemd/system/obsidian-livesfs.service" << 'EOF'
