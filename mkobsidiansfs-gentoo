@@ -24,7 +24,7 @@ check_command git
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs_gentoo" # SquashFS generation directory
 GENTOO_ARCH="amd64"
-GENTOO_INIT="systemd"        # or openrc
+GENTOO_INIT="systemd"        # or openrc or musl-openrc or musl-systemd
 GENTOO_PREFER_BINHOST="true" # set to anything other than `true` to disable
 ACCEPT_LICENSE="*"
 ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
@@ -60,12 +60,22 @@ if [[ -n "$oosnopass" ]]; then
 	echo ">>> No password enabled via env var."
 fi
 
+if [[ "$GENTOO_INIT" == musl-* ]]; then
+        FLAVOR="musl"
+        SUB_PATH="$GENTOO_INIT"
+    else
+        FLAVOR="desktop"
+        SUB_PATH="desktop-$GENTOO_INIT"
+    fi
+
+GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/init"
+
 # Dynamically fetch GENTOO_STAGE3_URL if set to "-"
 if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
 	echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
-	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/"
-	STAGE3_FILENAME=$(curl -s ${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/ |
-		grep -o "\"stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT.*\.tar\.xz\"" |
+	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-$SUB_PATH/"
+	STAGE3_FILENAME=$(curl -s ${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-$SUB_PATH/ |
+		grep -o "\"stage3-$GENTOO_ARCH-$SUB_PATH.*\.tar\.xz\"" |
 		sed 's/^.\(.*\).$/\1/')
 	if [[ -z "$STAGE3_FILENAME" ]]; then
 		echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
@@ -115,15 +125,29 @@ chroot_exec() {
 	chroot "$BUILD_DIR" /bin/bash -c "source /etc/profile && export PS1='(chroot) ${PS1}' && export TERM=xterm && $*"
 }
 
+# Append musl-locales to PACKAGES only if the flavor is musl
+if [[ "$FLAVOR" == "musl" ]]; then
+    echo ">>> Musl detected: Adding musl specific-packages list..."
+    #if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+    #	chroot_exec "echo 'sys-firmware/nvidia-firmware NVIDIA-r2' >> /etc/portage/package.license"
+    #	chroot_exec "echo 'media-libs/mesa X' >> /etc/portage/package.use/mesa"
+    #	chroot_exec "echo 'media-libs/libglvnd X' >> /etc/portage/package.use/libglvnd"
+    # 	chroot_exec "echo 'dev-util/mesa_clc LLVM_SLOT: 22' >> /etc/portage/package.use/mesa"
+    # 	chroot_exec "echo 'sys-auth/pambase elogind' >> /etc/portage/package.use/pambase"
+    #	PACKAGES="$PACKAGES sys-firmware/nvidia-firmware x11-drivers/xf86-video-nouveau media-libs/mesa" 
+    #fi
+    PACKAGES="$PACKAGES sys-apps/musl-locales"
+fi
+
 echo ">>> Updating Portage tree..."
 chroot_exec "emerge --sync"
 
 # systemd uses the /systemd suffixed profile.
 # OpenRC is the default - the plain desktop profile has no suffix.
 if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop/systemd"
+	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
 else
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop"
+	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
 fi
 echo ">>> Selecting Gentoo profile: $RESOLVED_PROFILE"
 chroot_exec "eselect profile set $RESOLVED_PROFILE"
@@ -131,6 +155,9 @@ if [[ "$ENABLE_AMDGPU" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards"
 fi
 if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+	if [[ "$GENTOO_INIT" == "musl-*" ]]; then
+		chroot_exec "echo '*/* VIDEO_CARDS: nouveau nvk' >> /etc/portage/package.use/00video_cards"
+	fi
 	chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards"
 fi
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
@@ -141,21 +168,28 @@ chroot_exec "echo 'LICENSE_ACCEPT=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.con
 chroot_exec "echo 'ACCEPT_LICENSE=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'GRUB_PLATFORMS=\"efi-64\"' >> /etc/portage/make.conf"
 chroot_exec "echo \"sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE\" | tee -a /etc/portage/package.license"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub\" | tee -a /etc/portage/package.use/installkernel"
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
-	# Suppress ModemManager/WWAN plugin in NetworkManager via config.
-	# This avoids recompiling NM and works regardless of USE flags.
-	mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
-	cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
+fi
+
+# Suppress ModemManager/WWAN plugin in NetworkManager via config.
+# This avoids recompiling NM and works regardless of USE flags.
+if [[ "$FLAVOR" == "musl" ]]; then	
+    mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
+    cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
 [main]
 plugins=keyfile
 
 [device]
 wifi.backend=wpa_supplicant
 NMEOF
+fi
+
+if [[ "$FLAVOR" == "musl" ]]; then
+	chroot_exec "echo 'net-wireless/wpa_supplicant dbus' >> /etc/portage/package.use/wpa_supplicant"
 fi
 chroot_exec "echo \"sys-fs/squashfs-tools lzma xz\" | tee -a /etc/portage/package.use/squashfs"
 chroot_exec "echo 'ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"' >> /etc/portage/make.conf"
@@ -205,21 +239,46 @@ chroot_exec "emerge --noreplace $EMERGE_OPTS $PACKAGES" || {
 
 echo ">>> Rebuilding dracut initramfs with dmsquash-live + cdrom/isofs drivers..."
 chroot_exec "mkdir -p /etc/dracut.conf.d && printf 'add_dracutmodules+=\" dmsquash-live \"\nadd_drivers+=\" cdrom isofs squashfs loop overlay \"\nhostonly=no\n' > /etc/dracut.conf.d/livecd.conf"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut -a \"systemd\"  --force --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
 else
 	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut --force --omit \"systemd\" --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
 fi
 
+if [[ "$GENTOO_INIT" == "musl-*" ]]; then
+	echo ">>> Configuring NVIDIA drivers in dracut.conf... (musl)"
+	cat >> "$BUILD_DIR/etc/dracut.conf" << 'EOF'
+# add_drivers+=" i915 " # Note leading and trailing spaces
+add_drivers+=" nouveau " # Note leading and trailing spaces
+# force_drivers+=" i915 " # Note leading and trailing spaces
+force_drivers+=" nouveau " # Note leading and trailing spaces
+EOF
+fi
+
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 	chroot_exec "systemctl enable $SERVICES"
-elif [[ "$GENTOO_INIT" == "openrc" ]]; then
+elif [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
 	for s in $SERVICES; do chroot_exec "rc-update add \"$s\" default"; done
-	# Enable agetty on tty1-6 as per Gentoo wiki - openrc-init does not use
-	# /etc/inittab so getty processes must be started explicitly as services.
-	chroot_exec "cd /etc/init.d && for n in \$(seq 1 6); do ln -s agetty agetty.tty\$n; rc-update add agetty.tty\$n default; done"
+	if [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
+		# musl stage3 ships with sysvinit as PID 1. We switch to openrc-init
+		# so that /etc/inittab is NOT used and our agetty services don't conflict.
+		echo ">>> Switching musl init from sysvinit to openrc-init..."
+		chroot_exec "emerge --noreplace sys-apps/openrc" || true
+		chroot_exec "emerge --deselect sys-apps/sysvinit"
+		chroot_exec "emerge -C sys-apps/sysvinit"
+		chroot_exec "rm -f /etc/inittab"
+		# Point /sbin/init to openrc-init
+		chroot_exec "ln -sf /sbin/openrc-init /sbin/init"
+		# Disable inittab so sysvinit can't interfere if it's still present
+		#chroot_exec "mv /etc/inittab /etc/inittab.disabled 2>/dev/null || true"
+	fi
+	# Now safe to add agetty services - openrc-init handles them, not inittab
+	for n in $(seq 1 6); do
+		ln -sf /etc/init.d/agetty "$BUILD_DIR/etc/init.d/agetty.tty$n"
+		chroot_exec "rc-update add agetty.tty$n default"
+	done
 fi
 
 # Create admin user
@@ -265,11 +324,22 @@ fi
 if [[ -n "$TIMEZONE" ]]; then
 	echo "Setting timezone to $TIMEZONE..."
 	chroot_exec "echo "$TIMEZONE" > /etc/timezone"
-	chroot_exec "emerge --config sys-libs/timezone-data"
+
+	if [[ "$FLAVOR" == "musl" ]]; then
+        echo ">>> Emerging timezone-data for musl..."
+        chroot_exec "emerge sys-libs/timezone-data"
+        
+        echo ">>> Setting TZ environment variable for musl..."
+        chroot_exec "mkdir -p /etc/profile.d"
+        chroot_exec "echo 'export TZ=\"$TIMEZONE\"' > /etc/profile.d/timezone.sh"
+        chroot_exec "ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime"
+    else
+        chroot_exec "emerge --config sys-libs/timezone-data"
+    fi
 fi
 
 # Generate machine-id so bash profile doesn't error on boot
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 	chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
 else
 	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
@@ -277,14 +347,21 @@ fi
 
 # Set locale
 echo ">>> Setting locale to en_US.UTF-8..."
-chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
-chroot_exec "locale-gen"
-chroot_exec "eselect locale set en_US.utf8"
+if [[ "$FLAVOR" == "musl" ]]; then
+		mkdir -p "$BUILD_DIR/etc/env.d"
+		chroot_exec "echo 'MUSL_LOCPATH="/usr/share/i18n/locales/musl"' >'/etc/env.d/00local'"
+		#chroot_exec "eselect locale set en_US.utf8"
+    chroot_exec "env-update"
+else
+    chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
+    chroot_exec "locale-gen"
+    chroot_exec "eselect locale set en_US.utf8"
+fi
 
 if [[ -n "$HOSTNAME" ]]; then
 	echo "Setting hostname to $HOSTNAME..."
 	echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
-	if [[ "$GENTOO_INIT" == "openrc" ]]; then
+	if [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
 		# OpenRC reads hostname from /etc/openrc/conf.d/hostname
 		mkdir -p "$BUILD_DIR/etc/openrc/conf.d"
 		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/openrc/conf.d/hostname"
@@ -298,7 +375,7 @@ fi
 
 # OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
 # Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
-if [[ "$GENTOO_INIT" == "openrc" ]]; then
+if [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
 	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
 	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
 	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
@@ -417,7 +494,7 @@ fi
 
 # Create a systemd service to symlink the live squashfs to /etc/system.sfs
 # so obsidianctl can find it at its expected path on every live boot.
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 mkdir -p "$BUILD_DIR/etc/systemd/system"
 cat > "$BUILD_DIR/etc/systemd/system/obsidian-livesfs.service" << 'EOF'
 [Unit]
