@@ -260,23 +260,22 @@ echo ">>> Enabling services to start on boot..."
 if [[ "$GENTOO_INIT" == "systemd" ]] || [[ "$GENTOO_INIT" == "musl-systemd" ]]; then
 	chroot_exec "systemctl enable $SERVICES"
 elif [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
+	# Enable standard user services
 	for s in $SERVICES; do chroot_exec "rc-update add \"$s\" default"; done
-	if [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
-		# musl stage3 ships with sysvinit as PID 1. We switch to openrc-init
-		# so that /etc/inittab is NOT used and our agetty services don't conflict.
-		echo ">>> Switching musl init from sysvinit to openrc-init..."
-		chroot_exec "emerge --noreplace sys-apps/openrc" || true
-		chroot_exec "emerge --deselect sys-apps/sysvinit"
-		chroot_exec "emerge -C sys-apps/sysvinit"
-		chroot_exec "rm -f /etc/inittab"
-		# Point /sbin/init to openrc-init
-		chroot_exec "ln -sf /sbin/openrc-init /sbin/init"
-		# Disable inittab so sysvinit can't interfere if it's still present
-		#chroot_exec "mv /etc/inittab /etc/inittab.disabled 2>/dev/null || true"
-	fi
-	# Now safe to add agetty services - openrc-init handles them, not inittab
+
+	# musl stage3 ships with sysvinit as PID 1. We switch to openrc-init
+	# so that /etc/inittab is NOT used and our agetty services don't conflict.
+	echo ">>> Switching init from sysvinit to openrc-init..."	
+	# Unmerge sysvinit so it stops interfering and doesn't overwrite /sbin/init on future updates
+	chroot_exec "emerge --noreplace sys-apps/openrc" || true
+	chroot_exec "emerge --deselect sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "emerge -C sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "rm -f /etc/inittab"
+	
+	chroot_exec "ln -sf /sbin/openrc-init /sbin/init"
+
 	for n in $(seq 1 6); do
-		ln -sf /etc/init.d/agetty "$BUILD_DIR/etc/init.d/agetty.tty$n"
+		chroot_exec "ln -sf agetty /etc/init.d/agetty.tty$n"
 		chroot_exec "rc-update add agetty.tty$n default"
 	done
 fi
