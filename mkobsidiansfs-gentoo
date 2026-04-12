@@ -24,7 +24,7 @@ check_command git
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs_gentoo" # SquashFS generation directory
 GENTOO_ARCH="amd64"
-GENTOO_INIT="systemd"        # or openrc or musl-openrc or musl-systemd
+GENTOO_INIT="systemd"        # or openrc, musl-openrc, hardened-openrc, musl-hardened-openrc, hardened-selinux-openrc, musl-systemd, hardened-systemd, musl-hardened-systemd, hardened-selinux-systemd 
 GENTOO_PREFER_BINHOST="true" # set to anything other than `true` to disable
 ACCEPT_LICENSE="*"
 ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
@@ -60,16 +60,32 @@ if [[ -n "$oosnopass" ]]; then
 	echo ">>> No password enabled via env var."
 fi
 
-# Parse GENTOO_INIT to extract the core init system and libc flavor
-if [[ "$GENTOO_INIT" == musl-* ]]; then
-	LIBC="musl"
-	FLAVOR="musl"
-	INIT_SYSTEM="${GENTOO_INIT#musl-}"
-	SUB_PATH="$GENTOO_INIT"
+# Parse GENTOO_INIT to extract the core init system, libc, and flavor
+if [[ "$GENTOO_INIT" == musl-hardened-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl/hardened"
+    INIT_SYSTEM="${GENTOO_INIT#musl-hardened-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == musl-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl"
+    INIT_SYSTEM="${GENTOO_INIT#musl-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-selinux-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened/selinux"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-selinux-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-}"
+    SUB_PATH="$GENTOO_INIT"
 else
-	FLAVOR="desktop"
-	INIT_SYSTEM="$GENTOO_INIT"
-	SUB_PATH="$FLAVOR-$GENTOO_INIT"
+    LIBC="glibc"
+    FLAVOR="desktop"
+    INIT_SYSTEM="$GENTOO_INIT"
+    SUB_PATH="$FLAVOR-$GENTOO_INIT"
 fi
 
 GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/init"
@@ -138,7 +154,7 @@ echo ">>> Updating Portage tree..."
 chroot_exec "emerge --sync"
 
 # systemd uses the /systemd suffixed profile. OpenRC is the default - the plain desktop profile has no suffix.
-if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened" && "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened/selinux" && "$INIT_SYSTEM" == "systemd" ]]; then
 	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
 else
 	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
@@ -169,14 +185,20 @@ chroot_exec "echo \"sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE\" | tee -a
 
 if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub\" | tee -a /etc/portage/package.use/installkernel"
+	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
+		chroot_exec "echo 'USE=\"\${USE} systemd -hardened\"' >> /etc/portage/make.conf"
+	fi
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
+	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
+		chroot_exec "echo 'USE=\"\${USE} -hardened\"' >> /etc/portage/make.conf"
+	fi
 fi
 
 # Suppress ModemManager/WWAN plugin in NetworkManager via config.
 # This avoids recompiling NM and works regardless of USE flags.
-if [[ "$LIBC" == "musl" ]]; then	
+if [[ "$LIBC" == "musl" ]] || [[ "$FLAVOR" == "hardened" ]] || [[ "$FLAVOR" == "hardened/selinux" ]]; then	
     mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
     cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
 [main]
