@@ -355,13 +355,6 @@ else
 	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
 fi
 
-# Generate machine-id so bash profile doesn't error on boot
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
-else
-	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
-fi
-
 # Set locale
 echo ">>> Setting locale to en_US.UTF-8..."
 if [[ "$LIBC" == "musl" ]]; then
