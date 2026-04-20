@@ -24,7 +24,7 @@ check_command git
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs_gentoo" # SquashFS generation directory
 GENTOO_ARCH="amd64"
-GENTOO_INIT="systemd"        # or openrc
+GENTOO_INIT="systemd"        # or openrc, musl-openrc, hardened-openrc, musl-hardened-openrc, hardened-selinux-openrc, musl-systemd, hardened-systemd, musl-hardened-systemd, hardened-selinux-systemd 
 GENTOO_PREFER_BINHOST="true" # set to anything other than `true` to disable
 ACCEPT_LICENSE="*"
 ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
@@ -60,13 +60,42 @@ if [[ -n "$oosnopass" ]]; then
 	echo ">>> No password enabled via env var."
 fi
 
+# Parse GENTOO_INIT to extract the core init system, libc, and flavor
+if [[ "$GENTOO_INIT" == musl-hardened-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl/hardened"
+    INIT_SYSTEM="${GENTOO_INIT#musl-hardened-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == musl-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl"
+    INIT_SYSTEM="${GENTOO_INIT#musl-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-selinux-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened/selinux"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-selinux-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-}"
+    SUB_PATH="$GENTOO_INIT"
+else
+    LIBC="glibc"
+    FLAVOR="desktop"
+    INIT_SYSTEM="$GENTOO_INIT"
+    SUB_PATH="$FLAVOR-$GENTOO_INIT"
+fi
+
+GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/init"
+
 # Dynamically fetch GENTOO_STAGE3_URL if set to "-"
 if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
 	echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
-	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/"
-	STAGE3_FILENAME=$(curl -s ${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/ |
-		grep -o "\"stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT.*\.tar\.xz\"" |
-		sed 's/^.\(.*\).$/\1/')
+	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/"
+	STAGE3_FILENAME=$(curl -s "${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/latest-stage3-$GENTOO_ARCH-$SUB_PATH.txt" |
+		grep -v '^#' | grep '\.tar\.xz' | awk '{print $1}' | head -n1)
 	if [[ -z "$STAGE3_FILENAME" ]]; then
 		echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
 		exit 1
@@ -76,7 +105,6 @@ if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
 fi
 
 if [[ "$2" != "" ]]; then
-
 	OUTPUT_SFS="$2"
 	echo ">>> Custom sfs output: $2"
 fi
@@ -115,24 +143,36 @@ chroot_exec() {
 	chroot "$BUILD_DIR" /bin/bash -c "source /etc/profile && export PS1='(chroot) ${PS1}' && export TERM=xterm && $*"
 }
 
+# Append musl-locales to PACKAGES only if the libc is musl
+if [[ "$LIBC" == "musl" ]]; then
+    echo ">>> Musl detected: Adding musl specific-packages list..."
+    PACKAGES="$PACKAGES sys-apps/musl-locales"
+fi
+
 echo ">>> Updating Portage tree..."
 chroot_exec "emerge --sync"
 
-# systemd uses the /systemd suffixed profile.
-# OpenRC is the default - the plain desktop profile has no suffix.
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop/systemd"
+# systemd uses the /systemd suffixed profile. OpenRC is the default - the plain desktop profile has no suffix.
+if [[ "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened" && "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened/selinux" && "$INIT_SYSTEM" == "systemd" ]]; then
+	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
 else
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop"
+	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
 fi
+
 echo ">>> Selecting Gentoo profile: $RESOLVED_PROFILE"
 chroot_exec "eselect profile set $RESOLVED_PROFILE"
+
 if [[ "$ENABLE_AMDGPU" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards"
 fi
+
 if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+	if [[ "$LIBC" == "musl" ]]; then
+		chroot_exec "echo '*/* VIDEO_CARDS: nouveau nvk' >> /etc/portage/package.use/00video_cards"
+	fi
 	chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards"
 fi
+
 echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
 chroot_exec "echo 'MAKEOPTS=\"-j$(nproc)\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} getbinpkg\"' >> /etc/portage/make.conf"
@@ -141,31 +181,39 @@ chroot_exec "echo 'LICENSE_ACCEPT=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.con
 chroot_exec "echo 'ACCEPT_LICENSE=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'GRUB_PLATFORMS=\"efi-64\"' >> /etc/portage/make.conf"
 chroot_exec "echo \"sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE\" | tee -a /etc/portage/package.license"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub\" | tee -a /etc/portage/package.use/installkernel"
+	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
+		chroot_exec "echo 'USE=\"\${USE} systemd -hardened\"' >> /etc/portage/make.conf"
+	fi
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
-	# Suppress ModemManager/WWAN plugin in NetworkManager via config.
-	# This avoids recompiling NM and works regardless of USE flags.
-	mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
-	cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
+	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
+		chroot_exec "echo 'USE=\"\${USE} -hardened\"' >> /etc/portage/make.conf"
+	fi
+fi
+
+# Suppress ModemManager/WWAN plugin in NetworkManager via config.
+# This avoids recompiling NM and works regardless of USE flags.
+if [[ "$LIBC" == "musl" ]] || [[ "$FLAVOR" == "hardened" ]] || [[ "$FLAVOR" == "hardened/selinux" ]]; then	
+    mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
+    cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
 [main]
 plugins=keyfile
 
 [device]
 wifi.backend=wpa_supplicant
 NMEOF
+    chroot_exec "echo 'net-wireless/wpa_supplicant dbus' >> /etc/portage/package.use/wpa_supplicant"
 fi
+
 chroot_exec "echo \"sys-fs/squashfs-tools lzma xz\" | tee -a /etc/portage/package.use/squashfs"
 chroot_exec "echo 'ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"' >> /etc/portage/make.conf"
 
 # Install a portage bashrc hook that re-applies the chroot bypass AFTER each
-# package postinst. This is necessary because sys-kernel/installkernel installs
-# its own real 05-check-chroot.install during emerge, overwriting a simple
-# `touch` placed before the emerge call. The hook fires after every package's
-# postinst and re-stamps the no-op override script each time, ensuring it is in
-# place when gentoo-kernel-bin's postinst ultimately runs kernel-install.
+# package postinst.
 echo ">>> Installing portage bashrc hook to bypass dracut chroot check..."
 mkdir -p "$BUILD_DIR/etc/portage"
 cat > "$BUILD_DIR/etc/portage/bashrc" << 'EOF'
@@ -181,9 +229,6 @@ post_pkg_postinst() {
 }
 EOF
 
-# Pre-create the kernel-install chroot bypass before emerge runs.
-# The bashrc hook re-stamps it after each postinst, but we need it in place
-# before the first emerge call too.
 echo ">>> Pre-creating kernel-install chroot bypass..."
 mkdir -p "$BUILD_DIR/etc/kernel/install.d" "$BUILD_DIR/etc/kernel/preinst.d" "$BUILD_DIR/usr/lib/kernel/preinst.d"
 touch "$BUILD_DIR/etc/kernel/install.d/05-check-chroot.install"
@@ -205,21 +250,44 @@ chroot_exec "emerge --noreplace $EMERGE_OPTS $PACKAGES" || {
 
 echo ">>> Rebuilding dracut initramfs with dmsquash-live + cdrom/isofs drivers..."
 chroot_exec "mkdir -p /etc/dracut.conf.d && printf 'add_dracutmodules+=\" dmsquash-live \"\nadd_drivers+=\" cdrom isofs squashfs loop overlay \"\nhostonly=no\n' > /etc/dracut.conf.d/livecd.conf"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut -a \"systemd\"  --force --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
 else
 	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut --force --omit \"systemd\" --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
 fi
 
+if [[ "$LIBC" == "musl" ]]; then
+	echo ">>> Configuring NVIDIA drivers in dracut.conf... (musl)"
+	cat >> "$BUILD_DIR/etc/dracut.conf" << 'EOF'
+# add_drivers+=" i915 " # Note leading and trailing spaces
+add_drivers+=" nouveau " # Note leading and trailing spaces
+# force_drivers+=" i915 " # Note leading and trailing spaces
+force_drivers+=" nouveau " # Note leading and trailing spaces
+EOF
+fi
+
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "systemctl enable $SERVICES"
-elif [[ "$GENTOO_INIT" == "openrc" ]]; then
+elif [[ "$INIT_SYSTEM" == "openrc" ]]; then
+	# Enable standard user services
 	for s in $SERVICES; do chroot_exec "rc-update add \"$s\" default"; done
-	# Enable agetty on tty1-6 as per Gentoo wiki - openrc-init does not use
-	# /etc/inittab so getty processes must be started explicitly as services.
-	chroot_exec "cd /etc/init.d && for n in \$(seq 1 6); do ln -s agetty agetty.tty\$n; rc-update add agetty.tty\$n default; done"
+
+	# musl stage3 ships with sysvinit as PID 1. We switch to openrc-init
+	echo ">>> Switching init from sysvinit to openrc-init..."	
+	chroot_exec "emerge --noreplace sys-apps/openrc" || true
+	chroot_exec "emerge --deselect sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "emerge -C sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "rm -f /etc/inittab"
+	
+	chroot_exec "ln -sf /sbin/openrc-init /sbin/init"
+
+	for n in $(seq 1 6); do
+		chroot_exec "ln -sf agetty /etc/init.d/agetty.tty$n"
+		chroot_exec "rc-update add agetty.tty$n default"
+	done
 fi
 
 # Create admin user
@@ -265,11 +333,22 @@ fi
 if [[ -n "$TIMEZONE" ]]; then
 	echo "Setting timezone to $TIMEZONE..."
 	chroot_exec "echo "$TIMEZONE" > /etc/timezone"
-	chroot_exec "emerge --config sys-libs/timezone-data"
+
+	if [[ "$LIBC" == "musl" ]]; then
+        echo ">>> Emerging timezone-data for musl..."
+        chroot_exec "emerge sys-libs/timezone-data"
+        
+        echo ">>> Setting TZ environment variable for musl..."
+        chroot_exec "mkdir -p /etc/profile.d"
+        chroot_exec "echo 'export TZ=\"$TIMEZONE\"' > /etc/profile.d/timezone.sh"
+        chroot_exec "ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime"
+    else
+        chroot_exec "emerge --config sys-libs/timezone-data"
+    fi
 fi
 
 # Generate machine-id so bash profile doesn't error on boot
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
 else
 	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
@@ -277,14 +356,20 @@ fi
 
 # Set locale
 echo ">>> Setting locale to en_US.UTF-8..."
-chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
-chroot_exec "locale-gen"
-chroot_exec "eselect locale set en_US.utf8"
+if [[ "$LIBC" == "musl" ]]; then
+		mkdir -p "$BUILD_DIR/etc/env.d"
+		chroot_exec "echo 'MUSL_LOCPATH="/usr/share/i18n/locales/musl"' >'/etc/env.d/00local'"
+    chroot_exec "env-update"
+else
+    chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
+    chroot_exec "locale-gen"
+    chroot_exec "eselect locale set en_US.utf8"
+fi
 
 if [[ -n "$HOSTNAME" ]]; then
 	echo "Setting hostname to $HOSTNAME..."
 	echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
-	if [[ "$GENTOO_INIT" == "openrc" ]]; then
+	if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 		# OpenRC reads hostname from /etc/openrc/conf.d/hostname
 		mkdir -p "$BUILD_DIR/etc/openrc/conf.d"
 		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/openrc/conf.d/hostname"
@@ -297,8 +382,7 @@ if [[ -n "$HOSTNAME" ]]; then
 fi
 
 # OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
-# Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
-if [[ "$GENTOO_INIT" == "openrc" ]]; then
+if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
 	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
 	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
@@ -330,6 +414,7 @@ clone_or_warn() {
     local pkg="$1"
     local dest="/opt/${pkg}"
     rm -rf "$dest"
+ 
     git clone "https://github.com/Obsidian-OS/${pkg}.git" "$dest" 2>/dev/null || {
         echo ">>> WARN: Could not clone ${pkg}, skipping"
         return 1
@@ -342,17 +427,6 @@ echo ">>> Installing obsidianctl..."
 if clone_or_warn obsidianctl; then
     cd /opt/obsidianctl && make build && make install || echo ">>> WARN: obsidianctl build/install failed"
     echo ">>> obsidianctl installed at /usr/local/sbin/obsidianctl"
-fi
-
-# installer - GUI installer
-echo ">>> Installing ObsidianOS GUI installer..."
-if clone_or_warn installer; then
-    if [ -f /opt/installer/Makefile ]; then
-        cd /opt/installer && make build 2>/dev/null; make install || true
-    elif [ -f /opt/installer/install.sh ]; then
-        bash /opt/installer/install.sh
-    fi
-    [ -f /opt/installer/requirements.txt ] && pip install -r /opt/installer/requirements.txt --break-system-packages 2>/dev/null || true
 fi
 
 # obsidianwall - install if present
@@ -387,6 +461,7 @@ if clone_or_warn plugind; then
             # OpenRC: generate a proper init script from the service file
             EXEC=$(grep -i "^ExecStart=" /opt/plugind/plugind.service | cut -d= -f2-)
             mkdir -p /etc/init.d/
+         
             cat > /etc/init.d/plugind << INITEOF
 #!/sbin/openrc-run
 description="plugind service"
@@ -409,7 +484,7 @@ chroot_exec "bash /tmp/_obsidian_install.sh" || echo ">>> WARN: ObsidianOS packa
 rm -f "$BUILD_DIR/tmp/_obsidian_install.sh"
 
 # Enable plugind service if it was installed
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "systemctl enable plugind 2>/dev/null || true"
 else
 	chroot_exec "rc-update add plugind default 2>/dev/null || true"
@@ -417,7 +492,7 @@ fi
 
 # Create a systemd service to symlink the live squashfs to /etc/system.sfs
 # so obsidianctl can find it at its expected path on every live boot.
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 mkdir -p "$BUILD_DIR/etc/systemd/system"
 cat > "$BUILD_DIR/etc/systemd/system/obsidian-livesfs.service" << 'EOF'
 [Unit]
@@ -467,7 +542,7 @@ umount "$BUILD_DIR/tmp"
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
 	echo "Error: mksquashfs failed to create the image."
-	exit 1
+  exit 1
 fi
 echo ">>> Cleaning up the build directory..."
 rm -rf "$BUILD_DIR"
