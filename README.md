@@ -38,7 +38,10 @@ An configuration should end with the `.mkobsfs` extention to identify it clearly
 
 ## NOTE REGARDING ALPINE
 
+### Make sure to run this as *ROOT*
+
 If you need a container, run it from `Containerfile.alpine`:
+
 ```
 # build
 podman build -f Containerfile.alpine -t localhost/mkobsidianfs-alpine
