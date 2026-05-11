@@ -35,3 +35,14 @@ POST_INSTALL="" # Line of bash to execute after installation is done
 An configuration should end with the `.mkobsfs` extention to identify it clearly.
 
 `output_sfs` (optional): overrides the OUTPUT_SFS configuration
+
+## NOTE REGARDING ALPINE
+
+If you need a container, run it from `Containerfile.alpine`:
+```
+# build
+podman build -f Containerfile.alpine -t localhost/mkobsidianfs-alpine
+
+# run
+podman run --rm -it --privileged -v .:/src -w /src localhost/mkobsidianfs-alpine ./mkobsidiansfs-alpine
+```
