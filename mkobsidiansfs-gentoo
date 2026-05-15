@@ -483,6 +483,15 @@ if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 	mkdir -p "$BUILD_DIR/run/etc_ab"
 fi
 
+# OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
+# Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
+if [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
+	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
+	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
+	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
+	mkdir -p "$BUILD_DIR/run/etc_ab"
+fi
+
 # Add root password
 if [[ -z "$ROOT_HAVEPASSWORD" ]]; then
 	echo ">>> Please set the password for the root user"
