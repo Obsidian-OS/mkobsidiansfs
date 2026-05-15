@@ -31,7 +31,7 @@ ENABLE_AMDGPU="true"         # enable AMD GPU Drivers
 ENABLE_NVIDIA=""             # enable NVIDIA GPU Drivers
 GENTOO_STAGE3_URL="-"        # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
-PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl dev-build/make"
+PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl dev-build/make sys-block/parted"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-gentoo" # Hostname
@@ -123,7 +123,7 @@ wget -O "/tmp/$STAGE3_TARBALL" "$GENTOO_STAGE3_URL"
 echo ">>> Extracting stage3 tarball to $BUILD_DIR..."
 tar xpf "/tmp/$STAGE3_TARBALL" --xattrs-include='*.*' --numeric-owner -C "$BUILD_DIR"
 echo ">>> Setting up chroot environment..."
-mkdir -p "$BUILD_DIR/proc" "$BUILD_DIR/sys" "$BUILD_DIR/dev" "$BUILD_DIR/tmp"
+mkdir -p "$BUILD_DIR"/{proc,sys,dev,tmp}
 mount -t proc /proc "$BUILD_DIR/proc"
 mount --rbind /sys "$BUILD_DIR/sys"
 mount --make-rslave "$BUILD_DIR/sys"
@@ -167,7 +167,7 @@ if [[ "$ENABLE_NVIDIA" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards"
 fi
 
-chroot_exec "echo 'MAKEOPTS=\"-j2\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'MAKEOPTS=\"-j$(( $(nproc) / 2 ))\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"\${FEATURES} parallel-fetch\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'EMERGE_DEFAULT_OPTS=\"--jobs=1 --load-average=1.5 --quiet-build=y\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} getbinpkg\"' >> /etc/portage/make.conf"
@@ -226,7 +226,6 @@ fi
 
 # Staged emerge with cleanup between stages
 cleanup_chroot() {
-	echo ">>> Cleaning chroot scratch space..."
 	chroot_exec '
 		rm -rf /var/tmp/portage/* 2>/dev/null
 		rm -rf /var/cache/binpkgs/* 2>/dev/null
@@ -237,16 +236,15 @@ cleanup_chroot() {
 	'
 }
 emerge_stage() {
-   local stage_name="$1"
-   shift
-   local pkgs="$*"
-    
-   if ! chroot_exec "emerge --noreplace $EMERGE_OPTS $pkgs"; then
-     echo "" >&2
-     echo ">>> FATAL: emerge failed at stage '$stage_name'." >&2
-     exit 1
-   fi
-   cleanup_chroot
+  local stage_name="$1"
+  shift
+  local pkgs="$*"  
+  if ! chroot_exec "emerge --noreplace $EMERGE_OPTS $pkgs"; then
+    echo "" >&2
+    echo ">>> FATAL: emerge failed at stage '$stage_name'." >&2
+    exit 1
+  fi
+  cleanup_chroot
 }
 emerge_stage "base-userspace" \
 	sys-apps/baselayout app-arch/xz-utils app-admin/sudo \
@@ -401,7 +399,7 @@ fi
 
 # OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
 # Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
-if [[ "$GENTOO_INIT" == "openrc" ]] || [[ "$GENTOO_INIT" == "musl-openrc" ]]; then
+if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
 	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
 	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
@@ -583,9 +581,10 @@ umount -R "$BUILD_DIR"/{dev,sys,proc,var/tmp,tmp} 2>/dev/null || true
 
 # Creating SquashFS image
 cores=$(nproc)
-available_mem=$(awk '/MemAvailable/ {print int(($2-1048576)/1024)}' /proc/meminfo)
+available_mem=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
 usable_mem=$(( available_mem > 1024 ? available_mem - 512 : available_mem ))
 mem=$(( usable_mem / (cores >= 2 ? cores : 1) ))
+mem=$(( mem < 256 ? 256 : mem ))
 if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors "$cores" -mem "${mem}M"; then
 		echo "Error: mksquashfs failed to create the image." >&2
 		exit 1
