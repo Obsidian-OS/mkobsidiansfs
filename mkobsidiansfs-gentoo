@@ -441,6 +441,13 @@ else
 	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
 fi
 
+# Generate machine-id so bash profile doesn't error on boot
+if [[ "$GENTOO_INIT" == "systemd" ]]; then
+	chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
+else
+	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
+fi
+
 # Set locale
 echo ">>> Setting locale to en_US.UTF-8..."
 if [[ "$LIBC" == "musl" ]]; then
@@ -514,6 +521,17 @@ echo ">>> Installing obsidianctl..."
 if clone_or_warn obsidianctl; then
     cd /opt/obsidianctl && make build && make install || echo ">>> WARN: obsidianctl build/install failed"
     echo ">>> obsidianctl installed at /usr/local/sbin/obsidianctl"
+fi
+
+# installer - GUI installer
+echo ">>> Installing ObsidianOS GUI installer..."
+if clone_or_warn installer; then
+    if [ -f /opt/installer/Makefile ]; then
+        cd /opt/installer && make build 2>/dev/null; make install || true
+    elif [ -f /opt/installer/install.sh ]; then
+        bash /opt/installer/install.sh
+    fi
+    [ -f /opt/installer/requirements.txt ] && pip install -r /opt/installer/requirements.txt --break-system-packages 2>/dev/null || true
 fi
 
 # obsidianwall - install if present
