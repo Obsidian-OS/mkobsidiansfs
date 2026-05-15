@@ -226,7 +226,6 @@ fi
 
 # Staged emerge with cleanup between stages
 cleanup_chroot() {
-	echo ">>> Cleaning chroot scratch space..."
 	chroot_exec '
 		rm -rf /var/tmp/portage/* 2>/dev/null
 		rm -rf /var/cache/binpkgs/* 2>/dev/null
