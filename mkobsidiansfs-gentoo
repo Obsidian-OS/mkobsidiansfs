@@ -24,23 +24,21 @@ check_command git
 # Default Settings. Do not edit, source a script that just edits these files.
 BUILD_DIR="/tmp/obsidian_rootfs_gentoo" # SquashFS generation directory
 GENTOO_ARCH="amd64"
-GENTOO_INIT="systemd"        # or openrc
+GENTOO_INIT="systemd"        # or openrc, musl-openrc, hardened-openrc, musl-hardened-openrc, hardened-selinux-openrc, musl-systemd, hardened-systemd, musl-hardened-systemd, hardened-selinux-systemd 
 GENTOO_PREFER_BINHOST="true" # set to anything other than `true` to disable
 ACCEPT_LICENSE="*"
-ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
-ENABLE_NVIDIA=""      # enable NVIDIA GPU Drivers
-GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
+ENABLE_AMDGPU="true"         # enable AMD GPU Drivers
+ENABLE_NVIDIA=""             # enable NVIDIA GPU Drivers
+GENTOO_STAGE3_URL="-"        # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
-GENTOO_PROFILE="default/linux/amd64/23.0/desktop/init" # Gentoo release, init is a placeholder. do not touch init.
-# Below is default packages for a minimal Gentoo desktop install and this script to work.
 PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl dev-build/make sys-block/parted"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
-HOSTNAME="imadeit" # Hostname
+HOSTNAME="obsidian-gentoo" # Hostname
 SERVICES="NetworkManager"  # Services to enable with systemctl (add plugind after obsidianctl install)
 ROOT_HAVEPASSWORD=""       # Set this to anything other than blank to remove the password from the root user.
 CUSTOM_SCRIPTS_DIR=""      # Place where scripts that must run in the SquashFS will run.
-ADMIN_USER="odd"          # Creates an user with the 'wheel' group
+ADMIN_USER="user"          # Creates an user with the 'wheel' group
 ADMIN_DOTFILES=""          # If an admin is created, a git repo that will be cloned to the new user.
 ADMIN_PASSWORD=""          # Password to set for ADMIN_USER, if empty will ask interactively
 ADMIN_DOTFILES_TYPE=""     # Type of dotfile repo. Requires git in PACKAGES if HOME or CONFIG.
@@ -60,13 +58,40 @@ if [[ -n "$oosnopass" ]]; then
 	echo ">>> No password enabled via env var."
 fi
 
+# Parse GENTOO_INIT to extract the core init system, libc, and flavor
+if [[ "$GENTOO_INIT" == musl-hardened-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl/hardened"
+    INIT_SYSTEM="${GENTOO_INIT#musl-hardened-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == musl-* ]]; then
+    LIBC="musl"
+    FLAVOR="musl"
+    INIT_SYSTEM="${GENTOO_INIT#musl-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-selinux-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened/selinux"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-selinux-}"
+    SUB_PATH="$GENTOO_INIT"
+elif [[ "$GENTOO_INIT" == hardened-* ]]; then
+    LIBC="glibc"
+    FLAVOR="hardened"
+    INIT_SYSTEM="${GENTOO_INIT#hardened-}"
+    SUB_PATH="$GENTOO_INIT"
+else
+    LIBC="glibc"
+    FLAVOR="desktop"
+    INIT_SYSTEM="$GENTOO_INIT"
+    SUB_PATH="desktop-$GENTOO_INIT"
+fi
+
 # Dynamically fetch GENTOO_STAGE3_URL if set to "-"
 if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
 	echo ">>> Dynamically fetching latest Gentoo Stage3 URL..."
-	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/"
-	STAGE3_FILENAME=$(curl -s ${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/current-stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT/ |
-		grep -o "\"stage3-$GENTOO_ARCH-desktop-$GENTOO_INIT[^\"]*\.tar\.xz\"" |
-		sed 's/^.\(.*\).$/\1/' | head -1)
+	STAGE3_BASE_URL="${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/"
+	STAGE3_FILENAME=$(curl -s "${GENTOO_MIRROR}releases/$GENTOO_ARCH/autobuilds/latest-stage3-$GENTOO_ARCH-$SUB_PATH.txt" |
+		grep -v '^#' | grep '\.tar\.xz' | awk '{print $1}' | head -n1)
 	if [[ -z "$STAGE3_FILENAME" ]]; then
 		echo "Error: Could not dynamically fetch Stage3 filename. Exiting."
 		exit 1
@@ -76,7 +101,6 @@ if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
 fi
 
 if [[ "$2" != "" ]]; then
-
 	OUTPUT_SFS="$2"
 	echo ">>> Custom sfs output: $2"
 fi
@@ -99,7 +123,7 @@ wget -O "/tmp/$STAGE3_TARBALL" "$GENTOO_STAGE3_URL"
 echo ">>> Extracting stage3 tarball to $BUILD_DIR..."
 tar xpf "/tmp/$STAGE3_TARBALL" --xattrs-include='*.*' --numeric-owner -C "$BUILD_DIR"
 echo ">>> Setting up chroot environment..."
-mkdir -p "$BUILD_DIR/proc" "$BUILD_DIR/sys" "$BUILD_DIR/dev" "$BUILD_DIR/tmp"
+mkdir -p "$BUILD_DIR"/{proc,sys,dev,tmp}
 mount -t proc /proc "$BUILD_DIR/proc"
 mount --rbind /sys "$BUILD_DIR/sys"
 mount --make-rslave "$BUILD_DIR/sys"
@@ -107,7 +131,6 @@ mount --rbind /dev "$BUILD_DIR/dev"
 mount --make-rslave "$BUILD_DIR/dev"
 mount -t tmpfs tmpfs "$BUILD_DIR/tmp"
 mkdir -p "$BUILD_DIR/var/tmp"
-mount -t tmpfs -o size=4G tmpfs "$BUILD_DIR/var/tmp"
 cp /etc/resolv.conf "$BUILD_DIR/etc/"
 
 # Chroot into the new system
@@ -118,79 +141,81 @@ chroot_exec() {
 echo ">>> Updating Portage tree..."
 chroot_exec "emerge --sync"
 
-# systemd uses the /systemd suffixed profile.
-# OpenRC is the default - the plain desktop profile has no suffix.
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop/systemd"
+# systemd uses the /systemd suffixed profile. OpenRC is the default - the plain desktop profile has no suffix.
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+	GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
 else
-	RESOLVED_PROFILE="default/linux/amd64/23.0/desktop"
+	GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
 fi
-echo ">>> Selecting Gentoo profile: $RESOLVED_PROFILE"
-chroot_exec "eselect profile set $RESOLVED_PROFILE"
+
+echo ">>> Selecting Gentoo profile: $GENTOO_PROFILE"
+chroot_exec "eselect profile set $GENTOO_PROFILE"
+
+# Append musl-locales to PACKAGES only if the libc is musl
+if [[ "$LIBC" == "musl" ]]; then
+    echo ">>> Musl detected: Adding musl specific-packages list..."
+    PACKAGES="$PACKAGES sys-apps/musl-locales"
+fi
+
 if [[ "$ENABLE_AMDGPU" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards"
 fi
 if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+	if [[ "$LIBC" == "musl" ]]; then
+		chroot_exec "echo '*/* VIDEO_CARDS: nouveau' >> /etc/portage/package.use/00video_cards"
+	fi
 	chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards"
 fi
-echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
-chroot_exec "echo 'MAKEOPTS=\"-j$(nproc)\"' >> /etc/portage/make.conf"
+
+chroot_exec "echo 'MAKEOPTS=\"-j$(( $(nproc) / 2 ))\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES=\"\${FEATURES} parallel-fetch\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'EMERGE_DEFAULT_OPTS=\"--jobs=1 --load-average=1.5 --quiet-build=y\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} getbinpkg\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} binpkg-request-signature\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'LICENSE_ACCEPT=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'ACCEPT_LICENSE=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'GRUB_PLATFORMS=\"efi-64\"' >> /etc/portage/make.conf"
 chroot_exec "echo \"sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE\" | tee -a /etc/portage/package.license"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub\" | tee -a /etc/portage/package.use/installkernel"
+	chroot_exec "echo 'USE=\"\${USE} systemd\"' >> /etc/portage/make.conf"
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
-	# Suppress ModemManager/WWAN plugin in NetworkManager via config.
-	# This avoids recompiling NM and works regardless of USE flags.
-	mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
-	cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
+fi
+
+# Suppress ModemManager/WWAN plugin in NetworkManager via config.
+# This avoids recompiling NM and works regardless of USE flags.
+if [[ "$LIBC" == "musl" ]] || [[ "$FLAVOR" == "hardened" ]] || [[ "$FLAVOR" == "hardened/selinux" ]]; then	
+    mkdir -p "$BUILD_DIR/etc/NetworkManager/conf.d"
+    cat > "$BUILD_DIR/etc/NetworkManager/conf.d/00-no-modemmanager.conf" << 'NMEOF'
 [main]
 plugins=keyfile
 
 [device]
 wifi.backend=wpa_supplicant
 NMEOF
+    chroot_exec "echo 'net-wireless/wpa_supplicant dbus' >> /etc/portage/package.use/wpa_supplicant"
 fi
-chroot_exec "echo \"sys-fs/squashfs-tools lzma xz\" | tee -a /etc/portage/package.use/squashfs"
+
+chroot_exec "echo \"sys-fs/squashfs-tools zstd xz\" | tee -a /etc/portage/package.use/squashfs"
 chroot_exec "echo 'ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"' >> /etc/portage/make.conf"
 
-# Install a portage bashrc hook that re-applies the chroot bypass AFTER each
-# package postinst. This is necessary because sys-kernel/installkernel installs
-# its own real 05-check-chroot.install during emerge, overwriting a simple
-# `touch` placed before the emerge call. The hook fires after every package's
-# postinst and re-stamps the no-op override script each time, ensuring it is in
-# place when gentoo-kernel-bin's postinst ultimately runs kernel-install.
+# Install a portage bashrc hook that re-applies the chroot bypass AFTER each package postinst.
 echo ">>> Installing portage bashrc hook to bypass dracut chroot check..."
 mkdir -p "$BUILD_DIR/etc/portage"
 cat > "$BUILD_DIR/etc/portage/bashrc" << 'EOF'
 post_pkg_postinst() {
     case "${CATEGORY}/${PN}" in
         sys-kernel/installkernel|sys-kernel/gentoo-kernel-bin)
-            mkdir -p /etc/kernel/install.d/ /etc/kernel/preinst.d/ /usr/lib/kernel/preinst.d/
-            touch /etc/kernel/install.d/05-check-chroot.install
-            touch /etc/kernel/preinst.d/05-check-chroot.install
-            touch /usr/lib/kernel/preinst.d/05-check-chroot.install
+            mkdir -p /etc/kernel/install.d/
+            printf '#!/bin/bash\nexit 0\n' > /etc/kernel/install.d/05-check-chroot.install
+            chmod +x /etc/kernel/install.d/05-check-chroot.install
             ;;
     esac
 }
 EOF
-
-# Pre-create the kernel-install chroot bypass before emerge runs.
-# The bashrc hook re-stamps it after each postinst, but we need it in place
-# before the first emerge call too.
-echo ">>> Pre-creating kernel-install chroot bypass..."
-mkdir -p "$BUILD_DIR/etc/kernel/install.d" "$BUILD_DIR/etc/kernel/preinst.d" "$BUILD_DIR/usr/lib/kernel/preinst.d"
-touch "$BUILD_DIR/etc/kernel/install.d/05-check-chroot.install"
-touch "$BUILD_DIR/etc/kernel/preinst.d/05-check-chroot.install"
-touch "$BUILD_DIR/usr/lib/kernel/preinst.d/05-check-chroot.install"
-# Tell kernel-install to skip chroot and boot-mount checks
-echo 'KERNEL_INSTALL_BYPASS_CHECKS=1' >> "$BUILD_DIR/etc/environment"
 
 echo ">>> Installing specified packages..."
 if [[ "$GENTOO_PREFER_BINHOST" == "true" ]]; then
@@ -198,28 +223,91 @@ if [[ "$GENTOO_PREFER_BINHOST" == "true" ]]; then
 else
 	EMERGE_OPTS=""
 fi
-chroot_exec "emerge --noreplace $EMERGE_OPTS $PACKAGES" || {
-	echo ">>> WARN: emerge exited non-zero (likely kernel postinst). Attempting --config to finish kernel install..."
-	chroot_exec "emerge --config sys-kernel/gentoo-kernel-bin" || echo ">>> WARN: emerge --config also failed, continuing anyway"
+
+# Staged emerge with cleanup between stages
+cleanup_chroot() {
+	chroot_exec '
+		rm -rf /var/tmp/portage/* 2>/dev/null
+		rm -rf /var/cache/binpkgs/* 2>/dev/null
+		rm -rf /var/cache/distfiles/* 2>/dev/null
+		rm -f /var/log/emerge*.log 2>/dev/null
+		rm -rf /var/log/portage/* 2>/dev/null
+		true
+	'
 }
+emerge_stage() {
+  local stage_name="$1"
+  shift
+  local pkgs="$*"  
+  if ! chroot_exec "emerge --noreplace $EMERGE_OPTS $pkgs"; then
+    echo "" >&2
+    echo ">>> FATAL: emerge failed at stage '$stage_name'." >&2
+    exit 1
+  fi
+  cleanup_chroot
+}
+emerge_stage "base-userspace" \
+	sys-apps/baselayout app-arch/xz-utils app-admin/sudo \
+	dev-lang/python net-misc/networkmanager	app-editors/nano
+emerge_stage "bootloader-prereqs" \
+	sys-boot/efibootmgr sys-boot/grub sys-kernel/dracut \
+	sys-kernel/installkernel sys-kernel/linux-firmware
+emerge_stage "kernel" \
+	sys-kernel/gentoo-kernel-bin
+emerge_stage "extras" $PACKAGES
+
+# Check if kernels are present otherwise copy it.
+chroot_exec '
+    kver=$(ls /lib/modules/ 2>/dev/null | head -n1)
+    if [ ! -f "/boot/vmlinuz-$kver" ]; then
+        echo ">>> /boot/vmlinuz-$kver missing; copying from /usr/lib/modules/$kver/vmlinuz"
+        if [ -f "/usr/lib/modules/$kver/vmlinuz" ]; then
+            cp "/usr/lib/modules/$kver/vmlinuz" "/boot/vmlinuz-$kver"
+        fi
+    fi
+'
 
 echo ">>> Rebuilding dracut initramfs with dmsquash-live + cdrom/isofs drivers..."
 chroot_exec "mkdir -p /etc/dracut.conf.d && printf 'add_dracutmodules+=\" dmsquash-live \"\nadd_drivers+=\" cdrom isofs squashfs loop overlay \"\nhostonly=no\n' > /etc/dracut.conf.d/livecd.conf"
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut -a \"systemd\"  --force --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+    chroot_exec 'kver=$(ls /lib/modules/ | head -n1) && dracut -a "systemd" --force --kver "$kver" /boot/initramfs-${kver}.img'
 else
-	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut --force --omit \"systemd\" --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
+    chroot_exec 'kver=$(ls /lib/modules/ | head -n1) && dracut --force --omit "systemd" --kver "$kver" /boot/initramfs-${kver}.img'
+fi
+
+if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+	if [[ "$LIBC" == "musl" ]]; then
+		echo ">>> Configuring NVIDIA drivers in dracut.conf... (musl)"
+		cat >> "$BUILD_DIR/etc/dracut.conf" << 'EOF'
+# add_drivers+=" i915 " # Note leading and trailing spaces
+add_drivers+=" nouveau " # Note leading and trailing spaces
+# force_drivers+=" i915 " # Note leading and trailing spaces
+force_drivers+=" nouveau " # Note leading and trailing spaces
+EOF
+	fi
 fi
 
 # Enabling services and copying scripts
 echo ">>> Enabling services to start on boot..."
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "systemctl enable $SERVICES"
-elif [[ "$GENTOO_INIT" == "openrc" ]]; then
+elif [[ "$INIT_SYSTEM" == "openrc" ]]; then
+	# Enable standard user services
 	for s in $SERVICES; do chroot_exec "rc-update add \"$s\" default"; done
-	# Enable agetty on tty1-6 as per Gentoo wiki - openrc-init does not use
-	# /etc/inittab so getty processes must be started explicitly as services.
-	chroot_exec "cd /etc/init.d && for n in \$(seq 1 6); do ln -s agetty agetty.tty\$n; rc-update add agetty.tty\$n default; done"
+
+	# musl stage3 ships with sysvinit as PID 1. We switch to openrc-init
+	echo ">>> Switching init from sysvinit to openrc-init..."	
+	chroot_exec "emerge --noreplace sys-apps/openrc" || true
+	chroot_exec "emerge --deselect sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "emerge -C sys-apps/sysvinit 2>/dev/null || true"
+	chroot_exec "rm -f /etc/inittab"
+	
+	chroot_exec "ln -sf /sbin/openrc-init /sbin/init"
+
+	for n in $(seq 1 6); do
+		chroot_exec "ln -sf agetty /etc/init.d/agetty.tty$n"
+		chroot_exec "rc-update add agetty.tty$n default"
+	done
 fi
 
 # Create admin user
@@ -265,26 +353,39 @@ fi
 if [[ -n "$TIMEZONE" ]]; then
 	echo "Setting timezone to $TIMEZONE..."
 	chroot_exec "echo "$TIMEZONE" > /etc/timezone"
-	chroot_exec "emerge --config sys-libs/timezone-data"
+
+	if [[ "$LIBC" == "musl" ]]; then
+        echo ">>> Emerging timezone-data for musl..."
+        chroot_exec "emerge sys-libs/timezone-data"
+        
+        echo ">>> Setting TZ environment variable for musl..."
+        chroot_exec "mkdir -p /etc/profile.d"
+        chroot_exec "echo 'export TZ=\"$TIMEZONE\"' > /etc/profile.d/timezone.sh"
+        chroot_exec "ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime"
+    else
+        chroot_exec "emerge --config sys-libs/timezone-data"
+    fi
 fi
 
 # Generate machine-id so bash profile doesn't error on boot
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
-	chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
-else
-	chroot_exec "dbus-uuidgen > /etc/machine-id 2>/dev/null || true"
-fi
+chroot_exec "systemd-machine-id-setup 2>/dev/null || dbus-uuidgen > /etc/machine-id"
 
 # Set locale
 echo ">>> Setting locale to en_US.UTF-8..."
-chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
-chroot_exec "locale-gen"
-chroot_exec "eselect locale set en_US.utf8"
+if [[ "$LIBC" == "musl" ]]; then
+		mkdir -p "$BUILD_DIR/etc/env.d"
+		chroot_exec "echo \"MUSL_LOCPATH=/usr/share/i18n/locales/musl\" > /etc/env.d/00local"
+    chroot_exec "env-update"
+else
+    chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
+    chroot_exec "locale-gen"
+    chroot_exec "eselect locale set en_US.utf8"
+fi
 
 if [[ -n "$HOSTNAME" ]]; then
 	echo "Setting hostname to $HOSTNAME..."
 	echo "$HOSTNAME" >"$BUILD_DIR/etc/hostname"
-	if [[ "$GENTOO_INIT" == "openrc" ]]; then
+	if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 		# OpenRC reads hostname from /etc/openrc/conf.d/hostname
 		mkdir -p "$BUILD_DIR/etc/openrc/conf.d"
 		echo "hostname=\"$HOSTNAME\"" >"$BUILD_DIR/etc/openrc/conf.d/hostname"
@@ -298,7 +399,7 @@ fi
 
 # OpenRC does not auto-mount /tmp as tmpfs unlike systemd (which uses tmp.mount).
 # Also create /run/etc_ab - OpenRC does not create missing /run dirs automatically.
-if [[ "$GENTOO_INIT" == "openrc" ]]; then
+if [[ "$INIT_SYSTEM" == "openrc" ]]; then
 	echo ">>> Adding /tmp tmpfs entry to /etc/fstab for OpenRC..."
 	echo "tmpfs /tmp tmpfs rw,nosuid,nodev,size=4G,mode=1777 0 0" >> "$BUILD_DIR/etc/fstab"
 	echo ">>> Creating /run/etc_ab mount point for OpenRC..."
@@ -323,6 +424,10 @@ chroot_exec "userdel -r _obsidian_branding 2>/dev/null || true"
 
 # These provide obsidianctl (installer), plugind, obsidianwall, and branding
 echo ">>> Installing ObsidianOS packages from source..."
+
+# Write the install script directly into the chroot, then run it as root.
+# obsidianctl is a Python script - clone it and symlink to /usr/local/bin.
+# installer is the GUI installer - clone and install its dependencies.
 cat > "$BUILD_DIR/tmp/_obsidian_install.sh" << 'INSTALL_EOF'
 #!/bin/bash
 
@@ -330,6 +435,7 @@ clone_or_warn() {
     local pkg="$1"
     local dest="/opt/${pkg}"
     rm -rf "$dest"
+ 
     git clone "https://github.com/Obsidian-OS/${pkg}.git" "$dest" 2>/dev/null || {
         echo ">>> WARN: Could not clone ${pkg}, skipping"
         return 1
@@ -387,6 +493,7 @@ if clone_or_warn plugind; then
             # OpenRC: generate a proper init script from the service file
             EXEC=$(grep -i "^ExecStart=" /opt/plugind/plugind.service | cut -d= -f2-)
             mkdir -p /etc/init.d/
+         
             cat > /etc/init.d/plugind << INITEOF
 #!/sbin/openrc-run
 description="plugind service"
@@ -409,15 +516,33 @@ chroot_exec "bash /tmp/_obsidian_install.sh" || echo ">>> WARN: ObsidianOS packa
 rm -f "$BUILD_DIR/tmp/_obsidian_install.sh"
 
 # Enable plugind service if it was installed
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "systemctl enable plugind 2>/dev/null || true"
 else
 	chroot_exec "rc-update add plugind default 2>/dev/null || true"
 fi
 
+# Create arch-chroot wrapper for obsidianctl compatibility.
+# obsidianctl hardcodes arch-chroot for GRUB installation; this wrapper
+# replicates its behaviour using standard chroot + manual bind mounts.
+mkdir -p "$BUILD_DIR/usr/local/bin"
+cat > "$BUILD_DIR/usr/local/bin/arch-chroot" << 'EOF'
+#!/bin/bash
+CHROOT="$1"
+shift
+mount -t proc /proc "$CHROOT/proc" 2>/dev/null || true
+mount --rbind /sys "$CHROOT/sys" 2>/dev/null || true
+mount --rbind /dev "$CHROOT/dev" 2>/dev/null || true
+chroot "$CHROOT" "$@"
+EXIT=$?
+umount -R "$CHROOT/proc" "$CHROOT/sys" "$CHROOT/dev" 2>/dev/null || true
+exit $EXIT
+EOF
+chmod +x "$BUILD_DIR/usr/local/bin/arch-chroot"
+
 # Create a systemd service to symlink the live squashfs to /etc/system.sfs
 # so obsidianctl can find it at its expected path on every live boot.
-if [[ "$GENTOO_INIT" == "systemd" ]]; then
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 mkdir -p "$BUILD_DIR/etc/systemd/system"
 cat > "$BUILD_DIR/etc/systemd/system/obsidian-livesfs.service" << 'EOF'
 [Unit]
@@ -449,25 +574,20 @@ echo ">>> Copying a backup of the system image configuration to /etc/config.mkge
 cp "$1" "$BUILD_DIR/etc/config.mkgentoosfs" || true
 
 # Cleanup chroot mounts
-echo ">>> Aggressively cleaning up Portage caches to free up RAM..."
-chroot_exec "rm -rf /var/cache/distfiles/*"
-chroot_exec "rm -rf /var/cache/binpkgs/*"
-chroot_exec "rm -rf /var/tmp/portage/*"
-echo ">>> Removing downloaded stage3 tarball to free up space..."
-rm -f "/tmp/$STAGE3_TARBALL"
-
 echo ">>> Cleaning up chroot mounts..."
-umount -R "$BUILD_DIR/dev"
-umount -R "$BUILD_DIR/sys"
-umount "$BUILD_DIR/proc"
-umount "$BUILD_DIR/var/tmp"
-umount "$BUILD_DIR/tmp"
+cleanup_chroot
+rm -f "/tmp/$STAGE3_TARBALL"
+umount -R "$BUILD_DIR"/{dev,sys,proc,var/tmp,tmp} 2>/dev/null || true
 
 # Creating SquashFS image
-echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
-if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
-	echo "Error: mksquashfs failed to create the image."
-	exit 1
+cores=$(nproc)
+available_mem=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
+usable_mem=$(( available_mem > 1024 ? available_mem - 512 : available_mem ))
+mem=$(( usable_mem / (cores >= 2 ? cores : 1) ))
+mem=$(( mem < 256 ? 256 : mem ))
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors "$cores" -mem "${mem}M"; then
+		echo "Error: mksquashfs failed to create the image." >&2
+		exit 1
 fi
 echo ">>> Cleaning up the build directory..."
 rm -rf "$BUILD_DIR"
