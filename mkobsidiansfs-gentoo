@@ -27,13 +27,11 @@ GENTOO_ARCH="amd64"
 GENTOO_INIT="systemd"        # or openrc, musl-openrc, hardened-openrc, musl-hardened-openrc, hardened-selinux-openrc, musl-systemd, hardened-systemd, musl-hardened-systemd, hardened-selinux-systemd 
 GENTOO_PREFER_BINHOST="true" # set to anything other than `true` to disable
 ACCEPT_LICENSE="*"
-ENABLE_AMDGPU="true"  # enable AMD GPU Drivers
-ENABLE_NVIDIA=""      # enable NVIDIA GPU Drivers
-GENTOO_STAGE3_URL="-" # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
+ENABLE_AMDGPU="true"         # enable AMD GPU Drivers
+ENABLE_NVIDIA=""             # enable NVIDIA GPU Drivers
+GENTOO_STAGE3_URL="-"        # URL to rootfs of stage3 of gentoo. `-` to dynamically fetch it
 GENTOO_MIRROR="https://distfiles.gentoo.org/"
-GENTOO_PROFILE="default/linux/amd64/23.0/desktop/init" # Gentoo release, init is a placeholder. do not touch init.
-# Below is default packages for a minimal Gentoo desktop install and this script to work.
-PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl dev-build/make sys-block/parted"
+PACKAGES="dev-vcs/git sys-apps/baselayout sys-fs/dosfstools app-arch/p7zip app-arch/xz-utils sys-fs/mtools net-misc/networkmanager app-admin/sudo app-editors/nano app-editors/vim sys-boot/efibootmgr dev-lang/python sys-fs/squashfs-tools sys-apps/gptfdisk sys-fs/f2fs-tools sys-kernel/gentoo-kernel-bin sys-kernel/linux-firmware sys-kernel/dracut sys-boot/grub app-crypt/sbctl"
 OUTPUT_SFS="system.sfs"    # Output SquashFS
 TIMEZONE=""                # Olson Timezone
 HOSTNAME="obsidian-gentoo" # Hostname
@@ -60,6 +58,22 @@ if [[ -n "$oosnopass" ]]; then
 	echo ">>> No password enabled via env var."
 fi
 
+# Validate GENTOO_INIT against the supported flavors before parsing.
+case "$GENTOO_INIT" in
+	systemd|openrc|\
+	musl-systemd|musl-openrc|\
+	hardened-systemd|hardened-openrc|\
+	musl-hardened-systemd|musl-hardened-openrc|\
+	hardened-selinux-systemd|hardened-selinux-openrc)
+		;;
+	*)
+		echo "Error: Unknown GENTOO_INIT value '$GENTOO_INIT'." >&2
+		echo "Supported: systemd, openrc, musl-{systemd,openrc}," >&2
+		echo "  hardened-{systemd,openrc}, musl-hardened-{systemd,openrc}," >&2
+		echo "  hardened-selinux-{systemd,openrc}" >&2
+		exit 1 ;;
+esac
+
 # Parse GENTOO_INIT to extract the core init system, libc, and flavor
 if [[ "$GENTOO_INIT" == musl-hardened-* ]]; then
     LIBC="musl"
@@ -85,10 +99,8 @@ else
     LIBC="glibc"
     FLAVOR="desktop"
     INIT_SYSTEM="$GENTOO_INIT"
-    SUB_PATH="$FLAVOR-$GENTOO_INIT"
+    SUB_PATH="desktop-$GENTOO_INIT"
 fi
-
-GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/init"
 
 # Dynamically fetch GENTOO_STAGE3_URL if set to "-"
 if [[ "$GENTOO_STAGE3_URL" == "-" ]]; then
@@ -136,7 +148,6 @@ mount --rbind /dev "$BUILD_DIR/dev"
 mount --make-rslave "$BUILD_DIR/dev"
 mount -t tmpfs tmpfs "$BUILD_DIR/tmp"
 mkdir -p "$BUILD_DIR/var/tmp"
-mount -t tmpfs -o size=4G tmpfs "$BUILD_DIR/var/tmp"
 cp /etc/resolv.conf "$BUILD_DIR/etc/"
 
 # Chroot into the new system
@@ -144,24 +155,24 @@ chroot_exec() {
 	chroot "$BUILD_DIR" /bin/bash -c "source /etc/profile && export PS1='(chroot) ${PS1}' && export TERM=xterm && $*"
 }
 
+echo ">>> Updating Portage tree..."
+chroot_exec "emerge --sync"
+
+# systemd uses the /systemd suffixed profile. OpenRC is the default - the plain desktop profile has no suffix.
+if [[ "$INIT_SYSTEM" == "systemd" ]]; then
+	GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
+else
+	GENTOO_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
+fi
+
+echo ">>> Selecting Gentoo profile: $GENTOO_PROFILE"
+chroot_exec "eselect profile set $GENTOO_PROFILE"
+
 # Append musl-locales to PACKAGES only if the libc is musl
 if [[ "$LIBC" == "musl" ]]; then
     echo ">>> Musl detected: Adding musl specific-packages list..."
     PACKAGES="$PACKAGES sys-apps/musl-locales"
 fi
-
-echo ">>> Updating Portage tree..."
-chroot_exec "emerge --sync"
-
-# systemd uses the /systemd suffixed profile. OpenRC is the default - the plain desktop profile has no suffix.
-if [[ "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened" && "$INIT_SYSTEM" == "systemd" ]] || [[ "$INIT_SYSTEM" == "hardened/selinux" && "$INIT_SYSTEM" == "systemd" ]]; then
-	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR/systemd"
-else
-	RESOLVED_PROFILE="default/linux/$GENTOO_ARCH/23.0/$FLAVOR"
-fi
-
-echo ">>> Selecting Gentoo profile: $RESOLVED_PROFILE"
-chroot_exec "eselect profile set $RESOLVED_PROFILE"
 
 if [[ "$ENABLE_AMDGPU" == "true" ]]; then
 	chroot_exec "echo '*/* VIDEO_CARDS: amdgpu radeonsi' >> /etc/portage/package.use/00video_cards"
@@ -169,13 +180,14 @@ fi
 
 if [[ "$ENABLE_NVIDIA" == "true" ]]; then
 	if [[ "$LIBC" == "musl" ]]; then
-		chroot_exec "echo '*/* VIDEO_CARDS: nouveau nvk' >> /etc/portage/package.use/00video_cards"
+		chroot_exec "echo '*/* VIDEO_CARDS: nouveau' >> /etc/portage/package.use/00video_cards"
 	fi
 	chroot_exec "echo '*/* VIDEO_CARDS: nvidia' >> /etc/portage/package.use/00video_cards"
 fi
 
-echo ">>> Setting MAKEOPTS in /etc/portage/make.conf (using nproc)..."
-chroot_exec "echo 'MAKEOPTS=\"-j$(nproc)\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'MAKEOPTS=\"-j2\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'FEATURES=\"\${FEATURES} parallel-fetch\"' >> /etc/portage/make.conf"
+chroot_exec "echo 'EMERGE_DEFAULT_OPTS=\"--jobs=1 --load-average=1.5 --quiet-build=y\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} getbinpkg\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'FEATURES=\"${FEATURES} binpkg-request-signature\"' >> /etc/portage/make.conf"
 chroot_exec "echo 'LICENSE_ACCEPT=\"~$ACCEPT_LICENSE\"' >> /etc/portage/make.conf"
@@ -185,15 +197,10 @@ chroot_exec "echo \"sys-kernel/linux-firmware @BINARY-REDISTRIBUTABLE\" | tee -a
 
 if [[ "$INIT_SYSTEM" == "systemd" ]]; then
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub\" | tee -a /etc/portage/package.use/installkernel"
-	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
-		chroot_exec "echo 'USE=\"\${USE} systemd -hardened\"' >> /etc/portage/make.conf"
-	fi
+	chroot_exec "echo 'USE=\"\${USE} systemd\"' >> /etc/portage/make.conf"
 else
 	chroot_exec "echo \"sys-kernel/installkernel dracut grub -systemd\" | tee -a /etc/portage/package.use/installkernel"
 	chroot_exec "echo 'USE=\"\${USE} -systemd\"' >> /etc/portage/make.conf"
-	if [[ "$FLAVOR" == "hardened" || "$FLAVOR" == "hardened/*"  ]]; then
-		chroot_exec "echo 'USE=\"\${USE} -hardened\"' >> /etc/portage/make.conf"
-	fi
 fi
 
 # Suppress ModemManager/WWAN plugin in NetworkManager via config.
@@ -210,11 +217,10 @@ NMEOF
     chroot_exec "echo 'net-wireless/wpa_supplicant dbus' >> /etc/portage/package.use/wpa_supplicant"
 fi
 
-chroot_exec "echo \"sys-fs/squashfs-tools lzma xz\" | tee -a /etc/portage/package.use/squashfs"
+chroot_exec "echo \"sys-fs/squashfs-tools zstd xz\" | tee -a /etc/portage/package.use/squashfs"
 chroot_exec "echo 'ACCEPT_KEYWORDS=\"~$GENTOO_ARCH\"' >> /etc/portage/make.conf"
 
-# Install a portage bashrc hook that re-applies the chroot bypass AFTER each
-# package postinst.
+# Install a portage bashrc hook that re-applies the chroot bypass AFTER each package postinst.
 echo ">>> Installing portage bashrc hook to bypass dracut chroot check..."
 mkdir -p "$BUILD_DIR/etc/portage"
 cat > "$BUILD_DIR/etc/portage/bashrc" << 'EOF'
@@ -235,7 +241,6 @@ mkdir -p "$BUILD_DIR/etc/kernel/install.d" "$BUILD_DIR/etc/kernel/preinst.d" "$B
 touch "$BUILD_DIR/etc/kernel/install.d/05-check-chroot.install"
 touch "$BUILD_DIR/etc/kernel/preinst.d/05-check-chroot.install"
 touch "$BUILD_DIR/usr/lib/kernel/preinst.d/05-check-chroot.install"
-# Tell kernel-install to skip chroot and boot-mount checks
 echo 'KERNEL_INSTALL_BYPASS_CHECKS=1' >> "$BUILD_DIR/etc/environment"
 
 echo ">>> Installing specified packages..."
@@ -244,28 +249,109 @@ if [[ "$GENTOO_PREFER_BINHOST" == "true" ]]; then
 else
 	EMERGE_OPTS=""
 fi
-chroot_exec "emerge --noreplace $EMERGE_OPTS $PACKAGES" || {
-	echo ">>> WARN: emerge exited non-zero (likely kernel postinst). Attempting --config to finish kernel install..."
-	chroot_exec "emerge --config sys-kernel/gentoo-kernel-bin" || echo ">>> WARN: emerge --config also failed, continuing anyway"
+
+# Staged emerge with cleanup between stages
+cleanup_chroot() {
+	echo ">>> Cleaning chroot scratch space..."
+	chroot_exec '
+		rm -rf /var/tmp/portage/* 2>/dev/null
+		rm -rf /var/cache/binpkgs/* 2>/dev/null
+		rm -rf /var/cache/distfiles/* 2>/dev/null
+		rm -f /var/log/emerge*.log 2>/dev/null
+		rm -rf /var/log/portage/* 2>/dev/null
+		true
+	'
+	#echo ">>> /tmp usage after cleanup:"
+	#df -h /tmp 2>/dev/null | tail -1 || true
 }
+
+emerge_stage() {
+   local stage_name="$1"
+   shift
+   local pkgs="$*"
+    
+   if ! chroot_exec "emerge --noreplace $EMERGE_OPTS $pkgs"; then
+     echo "" >&2
+     echo ">>> FATAL: emerge failed at stage '$stage_name'." >&2
+     exit 1
+   fi
+   cleanup_chroot
+}
+
+emerge_stage "base-userspace" \
+	sys-apps/baselayout app-arch/xz-utils app-admin/sudo \
+	dev-lang/python net-misc/networkmanager
+
+emerge_stage "tools" \
+	app-editors/nano
+
+emerge_stage "bootloader-prereqs" \
+	sys-boot/efibootmgr sys-boot/grub sys-kernel/dracut \
+	sys-kernel/installkernel
+
+emerge_stage "firmware" \
+	sys-kernel/linux-firmware
+
+emerge_stage "kernel" \
+	sys-kernel/gentoo-kernel-bin
+
+emerge_stage "extras" $PACKAGES
+
+# Check if kernels are present otherwise copy it.
+chroot_exec '
+    kver=$(ls /lib/modules/ 2>/dev/null | head -n1)
+    if [ -z "$kver" ]; then
+        echo ">>> FATAL: no kernel modules found in /lib/modules/" >&2
+        echo ">>> gentoo-kernel-bin did not install correctly." >&2
+        exit 1
+    fi
+    if [ ! -f "/boot/vmlinuz-$kver" ]; then
+        echo ">>> /boot/vmlinuz-$kver missing; copying from /usr/lib/modules/$kver/vmlinuz"
+        if [ -f "/usr/lib/modules/$kver/vmlinuz" ]; then
+            cp "/usr/lib/modules/$kver/vmlinuz" "/boot/vmlinuz-$kver"
+        else
+            echo ">>> FATAL: no vmlinuz at /usr/lib/modules/$kver/vmlinuz either" >&2
+            exit 1
+        fi
+    fi
+    echo ">>> Confirmed kernel image at /boot/vmlinuz-$kver"
+'
 
 echo ">>> Rebuilding dracut initramfs with dmsquash-live + cdrom/isofs drivers..."
 chroot_exec "mkdir -p /etc/dracut.conf.d && printf 'add_dracutmodules+=\" dmsquash-live \"\nadd_drivers+=\" cdrom isofs squashfs loop overlay \"\nhostonly=no\n' > /etc/dracut.conf.d/livecd.conf"
 
 if [[ "$INIT_SYSTEM" == "systemd" ]]; then
-	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut -a \"systemd\"  --force --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
+	if ! chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut -a \"systemd\"  --force --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\""; then
+		echo ">>> FATAL: dracut failed to build initramfs (systemd path)." >&2
+		exit 1
+	fi
 else
-	chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut --force --omit \"systemd\" --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\"" || echo ">>> WARN: dracut failed, continuing"
+	if ! chroot_exec "kver=\$(ls /lib/modules/ | head -n1) && dracut --force --omit \"systemd\" --kver \"\$kver\" /boot/initramfs-\${kver}.img && echo \">>> dracut done for kernel \$kver\""; then
+		echo ">>> FATAL: dracut failed to build initramfs (openrc path)." >&2
+		exit 1
+	fi
 fi
 
-if [[ "$LIBC" == "musl" ]]; then
-	echo ">>> Configuring NVIDIA drivers in dracut.conf... (musl)"
-	cat >> "$BUILD_DIR/etc/dracut.conf" << 'EOF'
+# Verify both kernel and initramfs are present.
+chroot_exec '
+    kver=$(ls /lib/modules/ | head -n1)
+    missing=0
+    [ -f "/boot/vmlinuz-$kver" ] || { echo ">>> FATAL: /boot/vmlinuz-$kver missing" >&2; missing=1; }
+    [ -f "/boot/initramfs-$kver.img" ] || { echo ">>> FATAL: /boot/initramfs-$kver.img missing" >&2; missing=1; }
+    [ "$missing" -eq 0 ] || exit 1
+    echo ">>> Verified /boot/ contains kernel and initramfs for $kver"
+'
+
+if [[ "$ENABLE_NVIDIA" == "true" ]]; then
+	if [[ "$LIBC" == "musl" ]]; then
+		echo ">>> Configuring NVIDIA drivers in dracut.conf... (musl)"
+		cat >> "$BUILD_DIR/etc/dracut.conf" << 'EOF'
 # add_drivers+=" i915 " # Note leading and trailing spaces
 add_drivers+=" nouveau " # Note leading and trailing spaces
 # force_drivers+=" i915 " # Note leading and trailing spaces
 force_drivers+=" nouveau " # Note leading and trailing spaces
 EOF
+	fi
 fi
 
 # Enabling services and copying scripts
@@ -359,7 +445,7 @@ fi
 echo ">>> Setting locale to en_US.UTF-8..."
 if [[ "$LIBC" == "musl" ]]; then
 		mkdir -p "$BUILD_DIR/etc/env.d"
-		chroot_exec "echo 'MUSL_LOCPATH="/usr/share/i18n/locales/musl"' >'/etc/env.d/00local'"
+		chroot_exec "echo \"MUSL_LOCPATH=/usr/share/i18n/locales/musl\" > /etc/env.d/00local"
     chroot_exec "env-update"
 else
     chroot_exec "echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen"
@@ -526,24 +612,39 @@ cp "$1" "$BUILD_DIR/etc/config.mkgentoosfs" || true
 
 # Cleanup chroot mounts
 echo ">>> Aggressively cleaning up Portage caches to free up RAM..."
-chroot_exec "rm -rf /var/cache/distfiles/*"
-chroot_exec "rm -rf /var/cache/binpkgs/*"
-chroot_exec "rm -rf /var/tmp/portage/*"
+cleanup_chroot
 echo ">>> Removing downloaded stage3 tarball to free up space..."
 rm -f "/tmp/$STAGE3_TARBALL"
 
 echo ">>> Cleaning up chroot mounts..."
-umount -R "$BUILD_DIR/dev"
-umount -R "$BUILD_DIR/sys"
-umount "$BUILD_DIR/proc"
-umount "$BUILD_DIR/var/tmp"
-umount "$BUILD_DIR/tmp"
+umount -R "$BUILD_DIR/dev" 2>/dev/null || true
+umount -R "$BUILD_DIR/sys" 2>/dev/null || true
+umount -R "$BUILD_DIR/proc" 2>/dev/null || true
+umount -R "$BUILD_DIR/var/tmp" 2>/dev/null || true
+umount -R "$BUILD_DIR/tmp" 2>/dev/null || true
 
 # Creating SquashFS image
 echo ">>> Creating the SquashFS image ($OUTPUT_SFS)..."
-if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors $(nproc); then
-	echo "Error: mksquashfs failed to create the image."
-  exit 1
+cores=$(nproc)
+available_mem=$(awk '/MemAvailable/ {print int(($2-1048576)/1024)}' /proc/meminfo)
+usable_mem=$(( available_mem > 1024 ? available_mem - 512 : available_mem ))
+mem=$(( usable_mem / (cores >= 2 ? cores : 1) ))
+echo "Available Memory: ${available_mem}"
+echo "Memory: ${mem}"
+echo "Cores: ${cores}"
+
+fallback_cores=$(( cores < 2 ? cores : 2 ))
+fallback_mem=512
+
+if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors "$cores" -mem "${mem}M"; then
+	echo ">>> WARN: mksquashfs failed with -processors $cores -mem ${mem}M." >&2
+	echo ">>> Retrying with conservative fallback: -processors $fallback_cores -mem ${fallback_mem}M..." >&2
+	rm -f "$OUTPUT_SFS"
+	if ! mksquashfs "$BUILD_DIR" "$OUTPUT_SFS" -noappend -comp xz -processors "$fallback_cores" -mem "${fallback_mem}M"; then
+		echo "Error: mksquashfs failed to create the image (both primary and fallback attempts)." >&2
+		exit 1
+	fi
+	echo ">>> mksquashfs succeeded with fallback settings."
 fi
 echo ">>> Cleaning up the build directory..."
 rm -rf "$BUILD_DIR"
